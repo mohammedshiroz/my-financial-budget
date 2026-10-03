@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003135136">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003135136">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003135136">
+<link rel="manifest" href="manifest.webmanifest?v=20261003135526">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003135526">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003135526">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -140,6 +140,19 @@ input[type=password]{background:var(--panel);border:1px solid var(--line);border
 .btn.sm{padding:4px 9px;font-size:12.5px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .toolbar .sp{flex:1}
+.debt-top{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:14px;align-items:start}
+.debt-top > .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+.acct{padding:0;overflow:hidden}
+.acct-h{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--panel2);border-bottom:1px solid var(--line);font-weight:700}
+.acct-g{display:grid;grid-template-columns:1fr 1fr}
+.acct-g > div{padding:11px 16px;border-bottom:1px solid var(--line)}
+.acct-g > div.full{grid-column:1/-1}
+.acct-g .k{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#8b1e3f;line-height:1.3}
+html[data-theme="dark"] .acct-g .k{color:#f28aa8}
+.acct-g .v{font-size:14.5px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}
+.acct-f{padding:10px 16px;font-size:12.5px;color:var(--muted);background:var(--panel2)}
+@media(max-width:1000px){ .debt-top{grid-template-columns:1fr} }
+@media(max-width:560px){ .debt-top > .kpis{grid-template-columns:1fr} }
 .grid + .toolbar,.card + .toolbar,.banner + .toolbar{margin-top:16px}
 .toolbar + .tabs{margin-top:8px}
 input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%}
@@ -667,7 +680,7 @@ function debtCalc(b){
   return {cur,r,st,tx,last,balance,balanceLKR:balance*r,limit:+b.limit||0,util:b.limit?Math.round(balance/b.limit*100):0,
     due,minDue,minLeft,planned,paidCycle,remainingCycle,status,next,proj,peak,paidDown:Math.max(0,peak-balance),pct:peak?Math.round((peak-balance)/peak*100):0,
     intPaid,insPaid,othPaid,feesPaid:intPaid+insPaid+othPaid,monthlyRate:(+b.interestPct||0)+(+b.insurancePct||0),
-    totalPaid:sum(tx.filter(x=>x.type==='payment'),x=>+x.amount)};
+    totalPaid:sum(tx.filter(x=>x.type==='payment'),x=>+x.amount), unbilled:sum(after.filter(x=>x.type!=='payment'),x=>+x.amount)};
 }
 
 /* ================= EXPENSES ================= */
@@ -1211,7 +1224,7 @@ function renderDebt(b){
   ${k.status==='overdue'?`<div class="banner bad">⚠ Payment overdue — at least the minimum ${F(k.minLeft)} was due ${fmtDate(k.due)}. A late minimum costs a fee.</div>`:''}
   ${k.status==='due-soon'?`<div class="banner">⏰ Pay ${F(k.remainingCycle)} by ${fmtDate(k.due)} (${relDate(k.due)}) — minimum ${F(k.minLeft)}.</div>`:''}
   ${!k.last?'<div class="banner">Add your latest statement (🧾 Add statement) to see due dates and your plan.</div>':''}
-  <div class="grid kpis">
+  <div class="debt-top"><div class="grid kpis">
     <div class="card kpi ${k.balance?'':'ok'}"><div class="l">Balance now</div><div class="v">${F(k.balance)}</div>${cur!=='LKR'?`<div class="s">≈ ${fmtLKR(k.balanceLKR)}</div>`:''}${k.limit?`<div style="margin-top:8px">${pctBar(k.util,k.util>70?'over':k.util>30?'warn':'')}</div><div class="s">${k.util}% of ${F(k.limit)} limit used</div>`:''}</div>
     <div class="card kpi ${k.status==='overdue'?'bad':k.status==='paid'?'ok':'warn'}"><div class="l">This cycle${k.due?' · due '+fmtDate(k.due):''}</div><div class="v">${k.status==='paid'?'✅ Paid':k.due?F(k.remainingCycle):'—'}</div>
       <div class="s">${k.last?`Statement ${F(k.last.closing)} · minimum ${F(k.minDue)} · your plan ${F(k.planned)}<br>Paid this cycle ${F(k.paidCycle)} ${badge(k.status,'debt')}`:'No statement yet'}</div></div>
@@ -1221,10 +1234,24 @@ function renderDebt(b){
     <div class="card kpi"><div class="l">Bank fees so far</div><div class="v">${F(k.feesPaid)}</div><div class="s">interest ${F(k.intPaid)} + insurance ${F(k.insPaid)}${k.othPaid?` + other ${F(k.othPaid)}`:''} · ${k.st.length} statement(s)</div></div>
     <div class="card kpi"><div class="l">Your plan</div><div class="v" style="font-size:16px">${planLabel(b.planMode||'fixed+min',b.planAmount,b)}</div>
       <div class="s">fees ${b.interestPct||0}% + ${b.insurancePct||0}% = ${k.monthlyRate.toFixed(2)}%/month (~${Math.round(k.monthlyRate*12)}%/year)${+b.monthlySpend?`<br>+ ${F(b.monthlySpend)} new spending a month`:''}</div></div>
-  </div>
+  </div>${debtSummary(b,k)}</div>
   ${tb}
   ${tabsHtml([['plan','📅 Repayment plan'],['statements','🧾 Statements'],['payments','💳 Payments & spending'],['compare','⚖️ Compare plans'],['docs','📁 Documents'],['notes','ℹ️ Notes & tips']])}
   ${body}`;
+}
+function debtSummary(b,k){
+  const F=v=>fmt(v,k.cur), cell=(label,value,full)=>`<div class="${full?'full':''}"><div class="k">${label}</div><div class="v">${value}</div></div>`;
+  const billed=k.last?Math.max(0,k.last.closing-k.paidCycle):k.balance;
+  return `<div class="card acct"><div class="acct-h"><span>Card account summary</span><span class="sub">${esc(b.cardRef||'')}</span></div>
+    <div class="acct-g">
+      ${cell('Primary holder',esc(b.holder||'—'),true)}
+      ${cell('Overall credit limit',k.limit?F(k.limit):'—')}${cell('Available to spend',k.limit?F(Math.max(0,k.limit-k.balance)):'—')}
+      ${cell('Total outstanding balance',F(k.balance))}${cell('Unbilled amount',F(k.unbilled))}
+      ${cell('Billed amount',F(billed))}${cell('Your plan — still to pay',k.status==='paid'?'✅ '+F(0):F(k.remainingCycle))}
+      ${cell('Payment due',k.due?fmtDate(k.due):'—')}${cell('Total due amount',F(k.minLeft))}
+      ${cell('Last statement balance',k.last?F(k.last.closing):'—')}${cell('Total paid',F(k.paidCycle))}
+    </div>
+    <div class="acct-f">${k.last?`Statement ${fmtDate(k.last.date)} · next statement ${fmtDate(k.next)}`:'Add your latest statement'}${b.autoDebit?' · '+esc(b.autoDebit):''}</div></div>`;
 }
 function debtPlan(b,k){
   const p=k.proj, F=v=>fmt(v,k.cur);
@@ -1645,6 +1672,7 @@ function bookModal(sid,id){
   if(type==='debt') fields=`
     <div class="full"><label>${esc(cap(noun))} name *</label><input type="text" name="name" value="${esc(b?.name||'')}" placeholder="e.g. Visa credit card, Car loan"></div>
     <div><label>Bank</label><input type="text" name="institution" value="${esc(b?.institution||'')}"></div>
+    <div><label>Card holder name</label><input type="text" name="holder" value="${esc(b?.holder||'')}"></div>
     <div><label>Card / account (last digits)</label><input type="text" name="cardRef" value="${esc(b?.cardRef||'')}" placeholder="•••• 1234"></div>
     <div><label>Currency</label><select name="currency">${opts(CURRENCIES,b?.currency||'QAR')}</select></div>
     <div><label>Credit limit</label><input type="number" step="0.01" min="0" name="limit" value="${b?.limit??''}"></div>
@@ -1684,7 +1712,7 @@ function bookModal(sid,id){
     if(type==='course') Object.assign(d,{institution:val(f,'institution'),studentId:val(f,'studentId'),startDate:val(f,'startDate'),endDate:val(f,'endDate')});
     if(type==='saving') Object.assign(d,{mode:val(f,'mode'),members:+val(f,'members')||0,payoutMonth:val(f,'payoutMonth'),payoutAmount:+val(f,'payoutAmount')||0,institution:val(f,'institution'),currency:val(f,'currency'),target:+val(f,'target')||0,targetDate:val(f,'targetDate'),monthly:+val(f,'monthly')||0,day:Math.min(31,Math.max(1,+val(f,'day')||1)),startDate:val(f,'startDate')||today()});
     if(type==='expense') Object.assign(d,{currency:val(f,'currency'),income:+val(f,'income')||0});
-    if(type==='debt'){ const g=n=>+val(f,n)||0; Object.assign(d,{institution:val(f,'institution'),cardRef:val(f,'cardRef'),currency:val(f,'currency'),limit:g('limit'),interestPct:g('interestPct'),insurancePct:g('insurancePct'),minPct:g('minPct'),statementDay:Math.min(31,Math.max(1,g('statementDay')||19)),dueDay:Math.min(31,Math.max(1,g('dueDay')||4)),planMode:val(f,'planMode'),planAmount:g('planAmount'),monthlySpend:g('monthlySpend'),autoDebit:val(f,'autoDebit')});
+    if(type==='debt'){ const g=n=>+val(f,n)||0; Object.assign(d,{institution:val(f,'institution'),holder:val(f,'holder'),cardRef:val(f,'cardRef'),currency:val(f,'currency'),limit:g('limit'),interestPct:g('interestPct'),insurancePct:g('insurancePct'),minPct:g('minPct'),statementDay:Math.min(31,Math.max(1,g('statementDay')||19)),dueDay:Math.min(31,Math.max(1,g('dueDay')||4)),planMode:val(f,'planMode'),planAmount:g('planAmount'),monthlySpend:g('monthlySpend'),autoDebit:val(f,'autoDebit')});
       if(!b){ d.startBalance=g('startBalance'); d.startDate=today(); } }
     if(b) Object.assign(b,d);
     else {
