@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003145614">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003145614">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003145614">
+<link rel="manifest" href="manifest.webmanifest?v=20261003155311">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003155311">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003155311">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -640,9 +640,10 @@ function savCalc(b){
   if(monthly>0) for(const m of ymRange(start,end)){
     const due=monthDay(m,b.day||1);
     const deposited=sum(tx.filter(x=>x.type==='deposit'&&x.date.slice(0,7)===m),x=>+x.amount);
+    const withdrawn=sum(tx.filter(x=>x.type==='withdrawal'&&x.date.slice(0,7)===m),x=>+x.amount), earned=sum(tx.filter(x=>x.type==='interest'&&x.date.slice(0,7)===m),x=>+x.amount);
     const done=deposited>=monthly-0.005;
-    const status=(target && balance>=target && !done && m>=now) ? 'waived' : dateStatus(done,deposited>0,due);
-    months.push({ym:m,due,planned:monthly,deposited,diff:deposited-monthly,status,short:Math.max(0,monthly-deposited)});
+    const status=(target && balance>=target && !done && m>=now) ? 'waived' : (done ? 'paid' : deposited>0 ? 'partial' : dateStatus(false,false,due));
+    months.push({ym:m,due,planned:monthly,deposited,withdrawn,earned,net:deposited+earned-withdrawn,diff:deposited-monthly,status,short:Math.max(0,monthly-deposited)});
   }
   const cm=months.find(x=>x.ym===now)||null;
   const missed=months.filter(x=>x.status==='overdue');
@@ -1151,14 +1152,14 @@ function savToolbar(b){
 }
 function savPlan(b,k){
   if(!k.monthly) return `${savToolbar(b)}<div class="card empty">No monthly contribution set. Click <b>Edit plan</b> to set a monthly amount and day — the schedule will appear here.</div>`;
-  return `${savToolbar(b)}<div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Due date</th><th class="num">Planned</th><th class="num">Deposited</th><th class="num">Difference</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>
+  return `${savToolbar(b)}<div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Due date</th><th class="num">Planned</th><th class="num">Deposited</th><th class="num">Withdrawn</th><th class="num">Net saved</th><th class="num">vs plan</th><th>Status</th><th class="no-print"></th></tr></thead><tbody>
     ${k.months.map(mo=>`<tr${mo.ym===ymNow()?' style="background:var(--accent-weak)"':''}><td><b>${ymLabel(mo.ym)}</b></td><td class="nowrap">${fmtDate(mo.due)}<div class="sub">${mo.status==='paid'||mo.status==='waived'?'':relDate(mo.due)}</div></td>
-      <td class="num">${fmt(mo.planned,k.cur)}</td><td class="num">${mo.deposited?fmt(mo.deposited,k.cur):'<span class="muted">—</span>'}</td>
+      <td class="num">${fmt(mo.planned,k.cur)}</td><td class="num">${mo.deposited?fmt(mo.deposited,k.cur):'<span class="muted">—</span>'}</td><td class="num ${mo.withdrawn?'neg':''}">${mo.withdrawn?'−'+fmt(mo.withdrawn,k.cur):'<span class="muted">—</span>'}</td><td class="num"><b>${mo.deposited||mo.withdrawn||mo.earned?fmt(mo.net,k.cur):'<span class="muted">—</span>'}</b>${mo.earned?`<div class="sub">incl. +${fmt(mo.earned,k.cur)} profit</div>`:''}</td>
       <td class="num ${mo.diff>=0?'pos':(mo.status==='overdue'?'neg':'muted')}">${mo.deposited||mo.status==='overdue'?(mo.diff>=0?'+':'')+fmt(mo.diff,k.cur):''}</td>
       <td>${badge(mo.status,'saving')}</td>
       <td class="no-print right">${['paid','waived'].includes(mo.status)?'':`<button class="btn sm ok" data-act="sav-txn" data-b="${b.id}" data-type="deposit" data-amount="${mo.short}" data-ym="${mo.ym}">Deposit</button>`}</td></tr>`).join('')}
-    </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num"><b>${fmt(sum(k.months,x=>x.planned),k.cur)}</b></td><td class="num"><b>${fmt(sum(k.months,x=>x.deposited),k.cur)}</b></td><td colspan="3"></td></tr></tfoot></table></div>
-    <div class="hint">A month counts as <b>Saved</b> when deposits in that month reach the planned amount. Interest and withdrawals affect the balance but not the monthly plan.</div>`;
+    </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num"><b>${fmt(sum(k.months,x=>x.planned),k.cur)}</b></td><td class="num"><b>${fmt(sum(k.months,x=>x.deposited),k.cur)}</b></td><td class="num neg"><b>${sum(k.months,x=>x.withdrawn)?'−'+fmt(sum(k.months,x=>x.withdrawn),k.cur):'—'}</b></td><td class="num"><b>${fmt(sum(k.months,x=>x.net),k.cur)}</b></td><td colspan="3"></td></tr></tfoot></table></div>
+    <div class="hint">A month is <b>Saved</b> when its deposits reach the plan, <b>Partly saved</b> when something was deposited but less than the plan, and <b>Missed</b> only when nothing was deposited. <b>Net saved</b> = deposits + profit − withdrawals in that month.</div>`;
 }
 function savTxns(b,k){
   const asc=[...b.txns].sort((x,y)=>x.date.localeCompare(y.date)); let run=0; const bal={};
