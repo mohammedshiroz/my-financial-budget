@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003143330">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003143330">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003143330">
+<link rel="manifest" href="manifest.webmanifest?v=20261003145111">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003145111">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003145111">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -200,6 +200,10 @@ tr.row.open td{background:var(--accent-weak)}
 .month-nav b{min-width:110px;text-align:center;font-size:15px}
 .lh-pay{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:2px 0}
 .lh-up{padding:2px 8px!important;font-size:12px!important}
+.cur-switch{display:inline-flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;flex-wrap:wrap}
+.cur-switch button{border:0;background:transparent;padding:7px 14px;border-radius:9px;cursor:pointer;font-weight:600;color:var(--muted)}
+.cur-switch button:hover{background:var(--panel2);color:var(--text)}
+.cur-switch button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(79,107,237,.3)}
 .month-nav .month-pick{width:auto;font-weight:700;text-align:center;padding:5px 8px}
 .overlay{position:fixed;inset:0;background:rgba(10,15,30,.45);display:grid;place-items:center;padding:16px;z-index:50}
 .modal{background:var(--panel);border-radius:14px;width:min(620px,100%);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -412,7 +416,11 @@ function fmt(n,cur='LKR',dec){
   n=+n||0; const d = dec ?? (Math.round(n)===n?0:2);
   return (n<0?'-':'')+(CUR_SYM[cur]??cur+' ')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 }
-const fmtLKR = n => fmt(Math.round(n),'LKR',0);
+const DASH = {active:false, cur:'ALL'};
+const homeCur = b => b.type==='course' ? (b.currency||'LKR') : (b.currency||'LKR');
+const dashOK = b => !DASH.active || DASH.cur==='ALL' || homeCur(b)===DASH.cur;
+const fmtLKR = n => (DASH.active && DASH.cur!=='ALL' && DASH.cur!=='LKR') ? fmt(Math.round(n/rate(DASH.cur)*100)/100, DASH.cur) : fmt(Math.round(n),'LKR',0);
+const CUR_VIEW = {LKR:'🇱🇰 Sri Lanka · Rs', QAR:'🇶🇦 Qatar · QAR', GBP:'🇬🇧 UK · £', USD:'🇺🇸 USD', EUR:'🇪🇺 EUR', AUD:'🇦🇺 AUD', CAD:'🇨🇦 CAD', INR:'🇮🇳 INR'};
 const fmtSize = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
 const ordinal = n => n+(['th','st','nd','rd'][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]||'th');
 const opts = (arr,sel) => arr.map(v=>`<option ${v===sel?'selected':''}>${esc(v)}</option>`).join('');
@@ -427,10 +435,10 @@ const safeName = s => s.replace(/[^\w]+/g,'-');
 let S = null;
 const V = {page:'dashboard', bookId:null, tab:null, open:new Set(), filter:{status:'',cat:'',q:''}, docFilter:'', docSection:'', month:null, lineFilter:''};
 const book = id => S.books.find(b=>b.id===id);
-const booksOf = type => S.books.filter(b=>b.type===type);
+const booksOf = type => S.books.filter(b=>b.type===type && dashOK(b));
 const sec = id => S.sections.find(s=>s.id===id);
 const secOf = b => sec(b.sectionId) || {id:'',name:KINDS[b.type].label,icon:KINDS[b.type].icon,kind:b.type,itemName:'item'};
-const booksIn = sid => S.books.filter(b=>b.sectionId===sid);
+const booksIn = sid => S.books.filter(b=>b.sectionId===sid && dashOK(b));
 const catsFor = b => { const c=secOf(b).cats; return c&&c.length ? c : (b.type==='course'?COURSE_CATS:EXP_CATS); };
 const cap = s => s ? s[0].toUpperCase()+s.slice(1) : s;
 const rate = cur => cur==='LKR' ? 1 : (+S.settings.rates[cur]||0);
@@ -826,11 +834,20 @@ function sectionNeed(s,now){
 const NEED_WORD = {course:'due',saving:'to put aside',expense:'still to spend',debt:'to pay'};
 
 function renderDashboard(){
+  const views=[...new Set(S.books.map(homeCur))].sort((a,b)=>(b==='LKR')-(a==='LKR')||a.localeCompare(b));
+  let cur=UI.dashCur||views[0]||'ALL'; if(cur!=='ALL'&&!views.includes(cur)) cur=views[0]||'ALL';
+  DASH.active=true; DASH.cur=cur;
+  try{
+    const sel=views.length>1?`<div class="cur-switch no-print">${views.map(c=>`<button class="${cur===c?'on':''}" data-act="dash-cur" data-cur="${c}">${CUR_VIEW[c]||c}</button>`).join('')}<button class="${cur==='ALL'?'on':''}" data-act="dash-cur" data-cur="ALL">🌍 All (in Rs)</button></div>`:'';
+    return sel+renderDashboardView();
+  } finally { DASH.active=false; }
+}
+function renderDashboardView(){
   const t=today(), now=ymNow();
   const ac=allCourseCalc();
   const sv=booksOf('saving').map(b=>({b,k:savCalc(b)}));
   const ex=booksOf('expense').map(b=>({b,k:expCalc(b,now)}));
-  const needBy=S.sections.map(s=>({s,v:sectionNeed(s,now)}));
+  const needBy=S.sections.filter(s=>DASH.cur==='ALL'||booksIn(s.id).length).map(s=>({s,v:sectionNeed(s,now)}));
   const need=sum(needBy,x=>x.v);
   const savBal=sum(sv,x=>x.k.chit?x.k.savedLKR:x.k.balanceLKR), savTarget=sum(sv,x=>x.k.targetLKR);
   const chits=sv.filter(x=>x.k.chit), chitOwe=sum(chits,x=>x.k.oweLKR), incoming=sum(chits,x=>x.k.payoutDueLKR);
@@ -846,10 +863,10 @@ function renderDashboard(){
   const actRow = a => { const d=parse(a.date), s=secOf(a.b); return `<div class="list-row">
     <div class="date-box"><b>${d.getDate()}</b><small>${MON[d.getMonth()]}</small></div>
     <div class="grow"><b>${esc(a.title)}</b> ${a.st}<div class="sub">${s.icon} ${dot(a.b.color,8)} ${esc(a.b.name)} · ${relDate(a.date)}</div></div>
-    <div class="num"><b>${a.amt}</b>${a.lkr!=null?`<div class="sub">≈ ${fmtLKR(a.lkr)}</div>`:''}</div>${a.btn}</div>`; };
+    <div class="num"><b>${a.amt}</b>${a.lkr!=null&&(DASH.cur==='ALL'||DASH.cur==='LKR')?`<div class="sub">≈ ${fmtLKR(a.lkr)}</div>`:''}</div>${a.btn}</div>`; };
 
   return `
-  <div class="top"><div><h1>Dashboard</h1><div class="sub">${fmtDate(t)} · ${S.sections.map(s=>`${booksIn(s.id).length} in ${esc(s.name)}`).join(' · ')} · amounts in LKR${foreign.length?` (${foreign.map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}</div></div>
+  <div class="top"><div><h1>Dashboard</h1><div class="sub">${fmtDate(t)} · ${S.sections.map(s=>`${booksIn(s.id).length} in ${esc(s.name)}`).join(' · ')} · ${DASH.cur==='ALL'?`all amounts converted to Rs${foreign.length?` (${foreign.map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:DASH.cur==='LKR'?`amounts in Rs${foreign.filter(c=>c!=='QAR').length?` (${foreign.filter(c=>c!=='QAR').map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:`amounts in ${DASH.cur}`}</div></div>
     <div class="toolbar no-print" style="margin:0"><button class="btn" data-act="section-modal">➕ Add section</button><button class="btn" onclick="print()">🖨 Print</button></div></div>
   ${DB.memory?`<div class="banner bad">⚠️ Temporary mode — this browser can't keep data. Save your changes to the OneDrive data file before closing: <button class="btn sm" data-act="sync-save">💾 Save data file</button></div>`:''}
   ${backupDays===null||backupDays>14?`<div class="banner no-print">💾 ${backupDays===null?'You have not exported a backup yet.':`Last backup was ${backupDays} days ago.`} Your data lives in this browser only — keep a backup file in your OneDrive folder. <button class="btn sm" data-act="export">Export backup now</button></div>`:''}
@@ -858,7 +875,7 @@ function renderDashboard(){
     <div class="card kpi big"><div class="l">Money needed — ${ymLabel(now)}</div><div class="v">${fmtLKR(need)}</div>
       ${incoming?`<div class="sub" style="margin-top:4px;color:var(--info)"><b>💰 Coming in: ${fmtLKR(incoming)}</b> (Seettu payout) → net ${need-incoming>=0?'need':'surplus'} ${fmtLKR(Math.abs(need-incoming))}</div>`:''}
       <div class="need-list">${needBy.map(({s,v})=>`<div><span>${s.icon} ${esc(s.name)} ${NEED_WORD[s.kind]}</span><b>${fmtLKR(v)}</b></div>`).join('')}</div></div>
-    ${S.sections.filter(s=>s.kind==='course').map(s=>{ const k=allCourseCalc(s.id), n=booksIn(s.id).length;
+    ${S.sections.filter(s=>s.kind==='course'&&booksIn(s.id).length).map(s=>{ const k=allCourseCalc(s.id), n=booksIn(s.id).length;
       return `<div class="card kpi" style="cursor:pointer" ${n===1?`data-act="open-book" data-b="${booksIn(s.id)[0].id}"`:''}><div class="l">${s.icon} ${s.name==='Courses'?'Course fees balance':esc(s.name)+' balance'}</div><div class="v">${fmtLKR(k.balLKR)}</div>
         <div class="s">Paid ${fmtLKR(k.paidLKR)} of ${fmtLKR(k.totalLKR)} · ${n} ${esc(n===1?(s.itemName||'item'):(s.itemName||'item')+'s')}</div><div style="margin-top:8px">${pctBar(k.pct)}</div>
         <div class="s">${k.next?`Next: ${fmtLKR(k.next.lkr)} on ${fmtDate(k.next.dueDate)}`:'Nothing scheduled'}${k.overdueN?` · <b class="neg">${fmtLKR(k.overdueLKR)} overdue</b>`:''}</div></div>`; }).join('')}
@@ -873,10 +890,10 @@ function renderDashboard(){
 
   <div class="grid two" style="margin-top:14px">
     <div class="card"><h2>📌 To do — overdue & next 30 days</h2>${acts.map(actRow).join('')||'<div class="empty">Nothing due in the next 30 days 🎉</div>'}</div>
-    <div class="card chart"><h2>Money out per month (LKR)</h2>${flowChart()}</div>
+    <div class="card chart"><h2>Money out per month (${DASH.cur==='ALL'?'Rs':DASH.cur==='LKR'?'Rs':DASH.cur})</h2>${flowChart()}</div>
   </div>
 
-  ${S.sections.map(s=>dashSection(s,now)).join('')}
+  ${S.sections.filter(s=>DASH.cur==='ALL'||booksIn(s.id).length).map(s=>dashSection(s,now)).join('')}
 
   <div class="card" style="margin-top:22px"><h2>Recent activity</h2>${recentActivity()}</div>`;
 }
@@ -959,7 +976,8 @@ function flowChart(){
   const max=Math.max(1,...months.map(m=>Math.max(tot(P[m]),tot(A[m]))));
   const W=640, H=250, pl=52, pb=30, pt=10, cw=(W-pl-8)/months.length, bw=Math.min(16,cw/2.6);
   const y=v=>pt+(H-pt-pb)*(1-v/max), h=v=>(H-pt-pb)*v/max;
-  const short=v=>v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?Math.round(v/1e3)+'k':Math.round(v);
+  const sc=(DASH.active&&DASH.cur!=='ALL'&&DASH.cur!=='LKR')?1/rate(DASH.cur):1;
+  const short=v=>(v*=sc)>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?Math.round(v/1e3)+'k':Math.round(v);
   const SER=[['course','var(--c-course)','Payments'],['saving','var(--c-sav)','Savings'],['expense','var(--c-exp)','Expenses']];
   let s=`<div class="legend">${SER.map(([,c,l])=>`<span><i style="background:${c}"></i>${l}</span>`).join('')}<span>Left bar = planned (faded) · right bar = actual</span></div>
   <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Planned vs actual money out per month">`;
@@ -2139,6 +2157,7 @@ const A = {
   toggle:d=>{ V.open.has(d.i)?V.open.delete(d.i):V.open.add(d.i); },
   month:d=>{ V.month = +d.d===0 ? ymNow() : ymAdd(V.month,+d.d); },
   'line-history':d=>{ lineHistoryModal(d.b,d.l); return false; },
+  'dash-cur':d=>{ UI.dashCur=d.cur; saveUI(); },
   'goto-month':d=>{ V.month=d.ym; V.tab='budget'; scrollTo({top:0}); },
   'book-modal':d=>{ bookModal(d.s,d.b); return false; },
   'section-modal':d=>{ sectionModal(d.s); return false; },
