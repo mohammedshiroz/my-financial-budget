@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003163435">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003163435">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003163435">
+<link rel="manifest" href="manifest.webmanifest?v=20261003163739">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003163739">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003163739">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1539,6 +1539,13 @@ function lineHistoryModal(bid,lid){
     <div class="sub" style="margin-bottom:10px">${esc(b.name)} · ${esc(l.category||'')}${l.isBill?' · bill due on the '+ordinal(+l.dueDay||1):''}${l.notes?' · '+esc(l.notes):''} · ${ymLabel(start)} → ${l.endMonth?ymLabel(l.endMonth):'now'}</div>
     ${(()=>{ const docs=S.files.filter(fl=>fl.bookId===b.id&&fl.lineId===l.id&&!fl.txnId); return docs.length?`<div style="margin-bottom:10px"><span class="sub">Bills not linked to a payment yet:</span> ${docs.map(d=>fileChip(d.id)).join('')}</div>`:''; })()}
     <div class="grid kpis" style="margin-bottom:12px">
+      ${(()=>{ const nm=ymNow(), r=expCalc(b,nm).rows.find(x=>x.l.id===l.id);
+        if(!r) return `<div class="card kpi"><div class="l">This month (${ymLabel(nm)})</div><div class="v">—</div><div class="s">Not active this month</div></div>`;
+        const owed=r.budget+(r.carryIn||0), left=Math.max(0,r.remaining);
+        return `<div class="card kpi ${r.status==='paid'?'ok':r.status==='overdue'?'bad':'warn'}" style="grid-column:1/-1"><div class="l">This month due · ${ymLabel(nm)}</div>
+          <div class="v">${r.status==='paid'?'✅ '+F(0)+' left':F(left)}</div>
+          <div class="s">${l.isBill?'Due '+fmtDate(r.due)+' ('+relDate(r.due)+') · ':''}${l.carry&&r.carryIn?`charges ${F(r.budget)} ${r.carryIn>0?'+ carried '+F(r.carryIn):'− credit '+F(-r.carryIn)} = ${F(owed)}`:'amount '+F(owed)} · paid ${F(r.spent)} ${l.isBill?badge(r.status,'bill'):badge(r.status,'budget')}</div>
+          ${left>0.005&&r.status!=='paid'?`<div style="margin-top:8px"><button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${l.id}" data-amount="${left}" data-ym="${nm}">Pay ${F(left)}</button></div>`:''}</div>`; })()}
       <div class="card kpi"><div class="l">Months</div><div class="v">${months.length}</div></div>
       <div class="card kpi"><div class="l">Total due</div><div class="v">${F(totDue)}</div></div>
       <div class="card kpi ${totPaid>=totDue-0.005?'ok':'warn'}"><div class="l">Total paid</div><div class="v">${F(totPaid)}</div><div class="s">${totPaid>=totDue-0.005?'All paid ✅':'Still due '+F(totDue-totPaid)}</div></div>
