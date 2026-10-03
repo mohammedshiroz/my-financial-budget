@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003122702">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003122702">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003122702">
+<link rel="manifest" href="manifest.webmanifest?v=20261003124920">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003124920">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003124920">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -455,7 +455,45 @@ function migrate(){
     
     S.migrations.renameChit=true; ch=true;
   }
+  if(!S.migrations.householdsV1){ reorganiseHouseholds(); S.migrations.householdsV1=true; ch=true; }
   return ch;
+}
+
+/* Monthly budgets: keep ONE monthly-budget section ("Monthly Expenses"), one budget per household inside it.
+   Other monthly-budget sections (e.g. "Monthly Billing") are removed — their budgets are MOVED in, never deleted. */
+function reorganiseHouseholds(){
+  const expSecs=S.sections.filter(s=>s.kind==='expense');
+  let target=expSecs.find(s=>/^monthly expenses$/i.test(s.name.trim()))||expSecs[0];
+  if(!target){ target={id:uid(),name:'Monthly Expenses',icon:'🧾',kind:'expense',cats:[...EXP_CATS]}; S.sections.push(target); }
+  target.name='Monthly Expenses'; target.itemName='household';
+  for(const s of expSecs) if(s!==target){
+    const own=booksIn(s.id);
+    // a section that was used as a household (e.g. "Mom Home") with one budget → that budget becomes the household
+    if(own.length===1 && !/billing|bills?$/i.test(s.name) && !own.some(b=>b.name.toLowerCase()===s.name.toLowerCase())) own[0].name=s.name;
+    for(const b of own) b.sectionId=target.id;
+    S.sections=S.sections.filter(x=>x!==s);
+  }
+  for(const name of ['Personal','Mom Home','My Home'])
+    if(!booksIn(target.id).some(b=>b.name.trim().toLowerCase()===name.toLowerCase()))
+      S.books.push({id:uid(),type:'expense',sectionId:target.id,name,currency:'LKR',income:0,color:COLORS[S.books.length%COLORS.length],created:new Date().toISOString(),notes:'',lines:[],txns:[]});
+}
+
+/* move a budget line (with all its recorded expenses and receipts) to another monthly budget */
+function moveLineModal(bid,lid){
+  const from=book(bid), l=from.lines.find(x=>x.id===lid), tx=from.txns.filter(t=>t.lineId===lid);
+  const targets=S.books.filter(b=>b.type==='expense'&&b.id!==bid);
+  if(!targets.length) return toast('Add another household first');
+  modal({title:`Move "${esc(l.name)}"`,submit:'Move',body:`<div class="form">
+    <div class="full"><label>Move to</label><select name="to">${S.sections.filter(s=>s.kind==='expense').map(s=>`<optgroup label="${s.icon} ${esc(s.name)}">${targets.filter(b=>b.sectionId===s.id).map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join('')}</optgroup>`).join('')}</select></div>
+    <div class="full sub">Moves the budget line${l.isBill?' (fixed bill, due day '+l.dueDay+')':''} and its <b>${tx.length}</b> recorded expense(s) with their receipts. Nothing is deleted.</div></div>`,
+  async onSubmit(f){
+    const to=book(val(f,'to')); if(!to) return false;
+    from.lines=from.lines.filter(x=>x!==l); to.lines.push(l);
+    const ids=new Set(tx.map(t=>t.id));
+    from.txns=from.txns.filter(t=>!ids.has(t.id)); to.txns.push(...tx);
+    for(const fl of S.files) if(fl.bookId===from.id && ids.has(fl.txnId)) fl.bookId=to.id;
+    await save(); toast(`Moved "${l.name}" to ${to.name}`);
+  }});
 }
 
 /* ---------- shared status logic ---------- */
@@ -1122,6 +1160,7 @@ function expBudget(b,k){
     <td class="nowrap right no-print">
       ${r.l.isBill&&r.status!=='paid'?`<button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${r.l.id}" data-amount="${Math.max(0,r.remaining)}" data-ym="${k.m}">Pay</button>`
         :`<button class="btn sm" data-act="exp-txn" data-b="${b.id}" data-l="${r.l.id}" data-ym="${k.m}">➕ Add</button>`}
+      <button class="icon-btn" title="Move to another household" data-act="move-line" data-b="${b.id}" data-l="${r.l.id}">↪</button>
       <button class="icon-btn" title="Edit line" data-act="line-modal" data-b="${b.id}" data-l="${r.l.id}">✏️</button>
       <button class="icon-btn" title="Delete line" data-act="del-line" data-b="${b.id}" data-l="${r.l.id}">🗑</button></td></tr>`;}).join('')}
   ${k.unplanned?`<tr><td><b>Unplanned / other</b><div class="sub">Expenses not linked to a budget line</div></td><td class="num">—</td><td class="num">${fmt(k.unplanned,cur)}</td><td></td><td></td><td><span class="badge b-over">Unbudgeted</span></td><td></td></tr>`:''}
@@ -1775,6 +1814,7 @@ const A = {
   'sav-txn':d=>{ savTxnModal(d.b,d.t,{type:d.type,amount:d.amount,ym:d.ym}); return false; },
   'exp-txn':d=>{ expTxnModal(d.b,d.t,{l:d.l,amount:d.amount,ym:d.ym}); return false; },
   'line-modal':d=>{ lineModal(d.b,d.l); return false; },
+  'move-line':d=>{ moveLineModal(d.b,d.l); return false; },
   'exp-setup':d=>{ setupModal(d.b); return false; },
   'view-file':d=>{ viewFile(d.f); return false; },
   'dl-file':d=>{ downloadFile(d.f); return false; },
