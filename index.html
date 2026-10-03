@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003162931">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003162931">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003162931">
+<link rel="manifest" href="manifest.webmanifest?v=20261003163435">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003163435">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003163435">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -725,7 +725,7 @@ function expCalc(b,m){
     const spent=sum(tx.filter(x=>x.lineId===l.id),x=>+x.amount), budget=+(l.overrides?.[m] ?? l.budget)||0;
     if(l.isBill){ const due=monthDay(m,l.dueDay);
       if(l.carry){ const carryIn=lineCarryIn(b,l,m), owe=budget+carryIn-spent;
-        const status = owe<=0.005 ? 'paid' : (m<ymNow() ? 'carried' : dateStatus(false,spent>0,due));
+        const status = owe<=0.005 || (spent>0 && owe<1) ? 'paid' : (m<ymNow() ? 'carried' : dateStatus(false,spent>0,due));   // a few cents left simply roll into the next bill
         return {l,spent,budget,carryIn,remaining:owe,due,status}; }
       return {l,spent,budget,remaining:budget-spent,due,status:dateStatus(budget>0?spent>=budget-0.005:spent>0,spent>0,due)}; }
     return {l,spent,budget,remaining:budget-spent,status:spent>budget+0.005?'over':spent>0?'ok':'unused'};
