@@ -1,6 +1,6 @@
-/* My Financial Budget — offline cache (version 20261003142115) */
-const CACHE='mfb-20261003142115';
-const FILES=['./','./manifest.webmanifest?v=20261003142115','./apple-touch-icon.png?v=20261003142115','./icon-192.png?v=20261003142115','./icon-512.png?v=20261003142115'];
+/* My Financial Budget — offline cache (version 20261003142513) */
+const CACHE='mfb-20261003142513';
+const FILES=['./','./manifest.webmanifest?v=20261003142513','./apple-touch-icon.png?v=20261003142513','./icon-192.png?v=20261003142513','./icon-512.png?v=20261003142513'];
 self.addEventListener('install',e=>{ e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener('activate',e=>{ e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==CACHE).map(n=>caches.delete(n)))).then(()=>self.clients.claim())); });
 self.addEventListener('fetch',e=>{

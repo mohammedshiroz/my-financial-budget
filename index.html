@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003142115">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003142115">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003142115">
+<link rel="manifest" href="manifest.webmanifest?v=20261003142513">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003142513">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003142513">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1444,6 +1444,7 @@ function expBudget(b,k){
     <td class="nowrap right no-print">
       ${r.l.isBill&&r.status!=='paid'?`<button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${r.l.id}" data-amount="${Math.max(0,r.remaining)}" data-ym="${k.m}">Pay</button>`
         :`<button class="btn sm" data-act="exp-txn" data-b="${b.id}" data-l="${r.l.id}" data-ym="${k.m}">➕ Add</button>`}
+      <button class="icon-btn" title="Month-by-month history" data-act="line-history" data-b="${b.id}" data-l="${r.l.id}">📜</button>
       <button class="icon-btn" title="Move to another household" data-act="move-line" data-b="${b.id}" data-l="${r.l.id}">↪</button>
       <button class="icon-btn" title="Edit line" data-act="line-modal" data-b="${b.id}" data-l="${r.l.id}">✏️</button>
       <button class="icon-btn" title="Delete line" data-act="del-line" data-b="${b.id}" data-l="${r.l.id}">🗑</button></td></tr>`;}).join('')}
@@ -1460,8 +1461,46 @@ function inactiveLines(b,k){
     ${rest.map(l=>{ const tx=b.txns.filter(t=>t.lineId===l.id), first=l.startMonth||(tx.map(t=>t.date.slice(0,7)).sort()[0])||ymNow(), last=l.endMonth||'';
       return `<tr><td><b>${esc(l.name)}</b><div class="sub">${esc(l.category||'')}${l.isBill?' · 🧾 bill, due '+ordinal(+l.dueDay||1):''}${l.notes?' · '+esc(l.notes):''}</div></td>
         <td class="nowrap">${ymLabel(first)} → ${last?ymLabel(last):'…'}</td><td class="num">${tx.length}</td><td class="num">${fmt(sum(tx,t=>+t.amount),cur)}</td>
-        <td class="nowrap right"><button class="btn sm" data-act="goto-month" data-ym="${first}">📅 View ${ymLabel(first)}</button> <button class="icon-btn" title="Edit line" data-act="line-modal" data-b="${b.id}" data-l="${l.id}">✏️</button></td></tr>`; }).join('')}
+        <td class="nowrap right"><button class="btn sm primary" data-act="line-history" data-b="${b.id}" data-l="${l.id}">📜 History</button> <button class="btn sm" data-act="goto-month" data-ym="${first}">📅 ${ymLabel(first)}</button> <button class="icon-btn" title="Edit line" data-act="line-modal" data-b="${b.id}" data-l="${l.id}">✏️</button></td></tr>`; }).join('')}
     </tbody></table></div><div class="hint">Use ◀ ▶ or the month box at the top to move between months.</div></div>`;
+}
+/* every month of one budget line: amount due (editable per month), paid, paid on, status, changes */
+function lineHistoryModal(bid,lid){
+  const b=book(bid), l=b.lines.find(x=>x.id===lid), cur=b.currency||'LKR', F=v=>fmt(v,cur);
+  const txAll=b.txns.filter(t=>t.lineId===l.id);
+  const start=l.startMonth||txAll.map(t=>t.date.slice(0,7)).sort()[0]||ymNow(), end=l.endMonth||ymNow();
+  const months=ymRange(start,end);
+  let prev=null, totDue=0, totPaid=0;
+  const rows=months.map(m=>{
+    const due=+(l.overrides?.[m]??l.budget)||0, tx=txAll.filter(t=>t.date.slice(0,7)===m).sort((a,c)=>a.date.localeCompare(c.date)), paid=sum(tx,t=>+t.amount);
+    const r=expCalc(b,m).rows.find(x=>x.l.id===l.id), st=r?.status||'upcoming';
+    const chg=prev===null||due===prev?'':(due>prev?`<span class="neg">▲ +${F(due-prev)}</span>`:`<span class="pos">▼ −${F(prev-due)}</span>`); prev=due; totDue+=due; totPaid+=paid;
+    return `<tr${m===ymNow()?' style="background:var(--accent-weak)"':''}><td class="nowrap"><b>${ymLabel(m)}</b></td>
+      <td class="num"><input type="number" step="0.01" min="0" value="${due}" data-ov="${m}" style="width:110px;text-align:right" title="Amount for ${ymLabel(m)}"></td>
+      <td class="nowrap">${chg}</td>
+      <td class="num">${paid?F(paid):'<span class="muted">—</span>'}</td>
+      <td class="nowrap">${tx.map(t=>`<span class="chip" data-act="exp-txn" data-b="${b.id}" data-t="${t.id}" title="Edit payment">${fmtDate(t.date)} · ${F(t.amount)}</span>`).join('')||'<span class="muted">—</span>'}</td>
+      <td>${l.isBill?badge(st,'bill'):badge(st,'budget')}</td>
+      <td class="right">${paid>=due-0.005&&due>0?'':`<button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${l.id}" data-amount="${Math.max(0,due-paid)}" data-ym="${m}">Pay</button>`}</td></tr>`;
+  }).reverse();
+  modal({title:`📜 ${esc(l.name)} — history`,submit:'',wide:true,body:`
+    <div class="sub" style="margin-bottom:10px">${esc(b.name)} · ${esc(l.category||'')}${l.isBill?' · bill due on the '+ordinal(+l.dueDay||1):''}${l.notes?' · '+esc(l.notes):''} · ${ymLabel(start)} → ${l.endMonth?ymLabel(l.endMonth):'now'}</div>
+    <div class="grid kpis" style="margin-bottom:12px">
+      <div class="card kpi"><div class="l">Months</div><div class="v">${months.length}</div></div>
+      <div class="card kpi"><div class="l">Total due</div><div class="v">${F(totDue)}</div></div>
+      <div class="card kpi ${totPaid>=totDue-0.005?'ok':'warn'}"><div class="l">Total paid</div><div class="v">${F(totPaid)}</div><div class="s">${totPaid>=totDue-0.005?'All paid ✅':'Still due '+F(totDue-totPaid)}</div></div>
+    </div>
+    <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th><th class="num">Paid</th><th>Paid on</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
+  extraFoot:`<button type="button" class="btn" id="lh-edit">✏️ Edit line</button>`,
+  onOpen(f){
+    f.querySelector('#lh-edit').onclick=()=>lineModal(bid,lid);
+    f.querySelectorAll('[data-ov]').forEach(inp=>inp.addEventListener('change',async()=>{
+      const m=inp.dataset.ov, v=+inp.value; if(isNaN(v)||v<0) return;
+      l.overrides ||= {}; if(Math.abs(v-(+l.budget||0))<0.005) delete l.overrides[m]; else l.overrides[m]=v;
+      await save(); toast(`${ymLabel(m)} amount set to ${F(v)}`); lineHistoryModal(bid,lid); render();
+    }));
+  }});
 }
 function expTxns(b,k){
   let tx=[...k.tx].sort((x,y)=>y.date.localeCompare(x.date));
@@ -2090,6 +2129,7 @@ const A = {
   tab:d=>{ V.tab=d.tab; V.docFilter=''; },
   toggle:d=>{ V.open.has(d.i)?V.open.delete(d.i):V.open.add(d.i); },
   month:d=>{ V.month = +d.d===0 ? ymNow() : ymAdd(V.month,+d.d); },
+  'line-history':d=>{ lineHistoryModal(d.b,d.l); return false; },
   'goto-month':d=>{ V.month=d.ym; V.tab='budget'; scrollTo({top:0}); },
   'book-modal':d=>{ bookModal(d.s,d.b); return false; },
   'section-modal':d=>{ sectionModal(d.s); return false; },
