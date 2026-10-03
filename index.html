@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003160033">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003160033">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003160033">
+<link rel="manifest" href="manifest.webmanifest?v=20261003160212">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003160212">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003160212">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1138,8 +1138,10 @@ function renderSaving(b){
     <div class="card kpi"><div class="l">Projection</div>
       <div class="v" style="font-size:17px">${k.finish==='reached'?'🎉 Target reached':k.finish?'Target '+fmtDate(k.finish):k.monthly||k.balance?'≈ '+fmt(Math.round(k.proj12),cur):'—'}</div>
       <div class="s">${k.finish&&k.finish!=='reached'?`saving ≈ ${fmt(Math.round(k.netMonthly),cur)}/month net${b.targetDate?(k.finish<=b.targetDate?' · on track ✅':' · later than target ⚠'):''}<br>`:''}${!k.finish&&(k.monthly||k.balance)?`in 12 months (${ymLabel(ymAdd(ymNow(),12))})<br>`:''}${k.eoyMonths?`by Dec ${ymNow().slice(0,4)}: ≈ ${fmt(Math.round(k.projEoy),cur)}<br>`:''}
-        Withdrawn so far <b class="neg">−${fmt(k.wd,cur)}</b>${k.wd?` (≈ ${fmt(Math.round(k.avgWd*100)/100,cur)}/month)`:''}<br>
         Net per month ≈ ${fmt(Math.round(k.netMonthly),cur)} = plan ${fmt(k.monthly,cur)} − withdrawals${k.avgInt?' + profit':''}</div></div>
+    ${(()=>{ const w=b.txns.filter(x=>x.type==='withdrawal').sort((p,q)=>q.date.localeCompare(p.date)), now=ymNow(), thisM=sum(w.filter(x=>x.date.slice(0,7)===now),x=>+x.amount);
+      return `<div class="card kpi ${w.length?'bad':''}"><div class="l">Withdrawals</div><div class="v">${w.length?'−'+fmt(k.wd,cur):fmt(0,cur)}</div>
+        <div class="s">${w.length?`${w.length} withdrawal(s) · ≈ ${fmt(Math.round(k.avgWd*100)/100,cur)}/month<br>Last: −${fmt(w[0].amount,cur)} on ${fmtDate(w[0].date)}<br>This month: ${thisM?'−'+fmt(thisM,cur):'none'} · <a data-act="tab" data-tab="txns" style="cursor:pointer">see all →</a>`:'None so far 👍'}</div></div>`; })()}
   </div>
   <div class="card" style="margin-top:14px;padding:12px 16px" class="sub"><span class="sub">Deposits ${fmt(k.dep,cur)} · Interest ${fmt(k.intr,cur)} · Withdrawals ${fmt(k.wd,cur)} · Plan ${k.monthly?fmt(k.monthly,cur)+' on day '+(b.day||1)+' each month':'not set'}</span></div>
   ${tabsHtml([['plan','📅 Monthly plan'],['txns','💳 Transactions'],['docs','📁 Documents'],['overview','ℹ️ Overview']])}
