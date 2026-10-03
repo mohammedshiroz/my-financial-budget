@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003143010">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003143010">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003143010">
+<link rel="manifest" href="manifest.webmanifest?v=20261003143330">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003143330">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003143330">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -198,6 +198,8 @@ tr.row.open td{background:var(--accent-weak)}
 .banner.bad{background:var(--bad-weak);color:var(--bad);border-color:var(--bad)}
 .month-nav{display:flex;gap:6px;align-items:center}
 .month-nav b{min-width:110px;text-align:center;font-size:15px}
+.lh-pay{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:2px 0}
+.lh-up{padding:2px 8px!important;font-size:12px!important}
 .month-nav .month-pick{width:auto;font-weight:700;text-align:center;padding:5px 8px}
 .overlay{position:fixed;inset:0;background:rgba(10,15,30,.45);display:grid;place-items:center;padding:16px;z-index:50}
 .modal{background:var(--panel);border-radius:14px;width:min(620px,100%);max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
@@ -1479,7 +1481,9 @@ function lineHistoryModal(bid,lid){
       <td class="num"><input type="number" step="0.01" min="0" value="${due}" data-ov="${m}" style="width:110px;text-align:right" title="Amount for ${ymLabel(m)}"></td>
       <td class="nowrap">${chg}</td>
       <td class="num">${paid?F(paid):'<span class="muted">—</span>'}</td>
-      <td class="nowrap">${tx.map(t=>`<span class="chip" data-act="exp-txn" data-b="${b.id}" data-t="${t.id}" title="Edit payment">${fmtDate(t.date)} · ${F(t.amount)}</span>`).join('')||'<span class="muted">—</span>'}</td>
+      <td>${tx.map(t=>`<div class="lh-pay"><span class="chip" data-act="exp-txn" data-b="${b.id}" data-t="${t.id}" title="Edit payment">✏️ ${fmtDate(t.date)} · ${F(t.amount)}</span>
+          ${(t.files||[]).map(fileChip).join('')}
+          <label class="btn sm lh-up" title="Upload receipt for this payment">📎 ${(t.files||[]).length?'Add':'Receipt'}<input type="file" hidden multiple accept="image/*,application/pdf" data-up="${t.id}"></label></div>`).join('')||'<span class="muted">—</span>'}</td>
       <td>${l.isBill?badge(st,'bill'):badge(st,'budget')}</td>
       <td class="right">${paid>=due-0.005&&due>0?'':`<button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${l.id}" data-amount="${Math.max(0,due-paid)}" data-ym="${m}">Pay</button>`}</td></tr>`;
   }).reverse();
@@ -1490,11 +1494,16 @@ function lineHistoryModal(bid,lid){
       <div class="card kpi"><div class="l">Total due</div><div class="v">${F(totDue)}</div></div>
       <div class="card kpi ${totPaid>=totDue-0.005?'ok':'warn'}"><div class="l">Total paid</div><div class="v">${F(totPaid)}</div><div class="s">${totPaid>=totDue-0.005?'All paid ✅':'Still due '+F(totDue-totPaid)}</div></div>
     </div>
-    <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th><th class="num">Paid</th><th>Paid on</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-    <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
+    <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th><th class="num">Paid</th><th>Paid on · receipts</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it, <b>📎</b> to attach a receipt photo or PDF, or a receipt to view it. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
   extraFoot:`<button type="button" class="btn" id="lh-edit">✏️ Edit line</button>`,
   onOpen(f){
     f.querySelector('#lh-edit').onclick=()=>lineModal(bid,lid);
+    f.querySelectorAll('[data-up]').forEach(inp=>inp.addEventListener('change',async()=>{
+      const t=b.txns.find(x=>x.id===inp.dataset.up); if(!t||!inp.files.length) return;
+      const ids=await addFiles(inp.files,{bookId:b.id,txnId:t.id,docType:l.isBill?'Bill':'Receipt',note:`${l.name} — ${fmtDate(t.date)}`});
+      t.files=(t.files||[]).concat(ids); await save(); toast(`📎 ${ids.length} receipt(s) attached to ${fmtDate(t.date)}`); lineHistoryModal(bid,lid); render();
+    }));
     f.querySelectorAll('[data-ov]').forEach(inp=>inp.addEventListener('change',async()=>{
       const m=inp.dataset.ov, v=+inp.value; if(isNaN(v)||v<0) return;
       l.overrides ||= {}; if(Math.abs(v-(+l.budget||0))<0.005) delete l.overrides[m]; else l.overrides[m]=v;
