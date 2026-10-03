@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003131056">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003131056">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003131056">
+<link rel="manifest" href="manifest.webmanifest?v=20261003134841">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003134841">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003134841">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -661,10 +661,10 @@ function debtCalc(b){
   if(remainingCycle>0) proj.rows.unshift({current:true,stmt:last.date,open:balance,int:0,ins:0,fees:0,spend:0,stmtBal:balance,min:minLeft,pay:remainingCycle,due,rest:startBal});
   if(remainingCycle>0){ proj.months++; proj.paid+=remainingCycle; if(!proj.end) proj.end=due; }
   const peak=Math.max(+b.startBalance||0,...st.map(s=>Math.max(+s.opening||0,+s.closing||0)),balance);
-  const intPaid=sum(st,s=>+s.interest), insPaid=sum(st,s=>+s.insurance);
+  const intPaid=sum(st,s=>+s.interest), insPaid=sum(st,s=>+s.insurance), othPaid=sum(st,s=>+s.other||0);
   return {cur,r,st,tx,last,balance,balanceLKR:balance*r,limit:+b.limit||0,util:b.limit?Math.round(balance/b.limit*100):0,
     due,minDue,minLeft,planned,paidCycle,remainingCycle,status,next,proj,peak,paidDown:Math.max(0,peak-balance),pct:peak?Math.round((peak-balance)/peak*100):0,
-    intPaid,insPaid,feesPaid:intPaid+insPaid,monthlyRate:(+b.interestPct||0)+(+b.insurancePct||0),
+    intPaid,insPaid,othPaid,feesPaid:intPaid+insPaid+othPaid,monthlyRate:(+b.interestPct||0)+(+b.insurancePct||0),
     totalPaid:sum(tx.filter(x=>x.type==='payment'),x=>+x.amount)};
 }
 
@@ -1216,7 +1216,7 @@ function renderDebt(b){
     <div class="card kpi ${p.never?'bad':'ok'}"><div class="l">Debt-free</div><div class="v">${k.balance<=0.005?'🎉 Now':p.never?'Never':p.end?ymLabel(p.end.slice(0,7)):'—'}</div>
       <div class="s">${p.never?'Your plan doesn\'t cover interest + new spending — pay more':`${p.months} more payment(s) · bank fees ≈ ${F(p.fees)}`}</div></div>
     <div class="card kpi"><div class="l">Paid down so far</div><div class="v">${F(k.paidDown)}</div><div style="margin-top:8px">${pctBar(k.pct)}</div><div class="s">${k.pct}% of the ${F(k.peak)} peak</div></div>
-    <div class="card kpi"><div class="l">Bank fees so far</div><div class="v">${F(k.feesPaid)}</div><div class="s">interest ${F(k.intPaid)} + insurance ${F(k.insPaid)} · ${k.st.length} statement(s)</div></div>
+    <div class="card kpi"><div class="l">Bank fees so far</div><div class="v">${F(k.feesPaid)}</div><div class="s">interest ${F(k.intPaid)} + insurance ${F(k.insPaid)}${k.othPaid?` + other ${F(k.othPaid)}`:''} · ${k.st.length} statement(s)</div></div>
     <div class="card kpi"><div class="l">Your plan</div><div class="v" style="font-size:16px">${planLabel(b.planMode||'fixed+min',b.planAmount,b)}</div>
       <div class="s">fees ${b.interestPct||0}% + ${b.insurancePct||0}% = ${k.monthlyRate.toFixed(2)}%/month (~${Math.round(k.monthlyRate*12)}%/year)${+b.monthlySpend?`<br>+ ${F(b.monthlySpend)} new spending a month`:''}</div></div>
   </div>
@@ -1235,10 +1235,10 @@ function debtPlan(b,k){
 }
 function debtStatements(b,k){
   const F=v=>fmt(v,k.cur), st=k.st;
-  return `<div class="tbl-wrap"><table><thead><tr><th>Statement</th><th class="num">Opening</th><th class="num">You paid</th><th class="num">New spending</th><th class="num">Interest</th><th class="num">Insurance</th><th class="num">Bank total</th><th class="num">Closing</th><th class="num">Minimum</th><th class="no-print"></th></tr></thead><tbody>
-  ${st.map(s=>`<tr><td class="nowrap"><b>${fmtDate(s.date)}</b>${s.note?`<div class="sub">${esc(s.note)}</div>`:''}<div>${(s.files||[]).map(fileChip).join('')}</div></td><td class="num">${F(s.opening)}</td><td class="num pos">${F(s.paid)}</td><td class="num">${F(s.spend)}</td><td class="num">${F(s.interest)}</td><td class="num">${F(s.insurance)}</td><td class="num">${F((+s.interest)+(+s.insurance))}</td><td class="num"><b>${F(s.closing)}</b></td><td class="num">${s.minDue!=null&&s.minDue!==''?F(s.minDue):'<span class="muted">—</span>'}</td>
-    <td class="nowrap no-print"><button class="icon-btn" title="Edit" data-act="debt-stmt" data-b="${b.id}" data-s="${s.id}">✏️</button><button class="icon-btn" title="Delete" data-act="del-stmt" data-b="${b.id}" data-s="${s.id}">🗑</button></td></tr>`).join('')||'<tr><td colspan="10" class="empty">No statements yet — add your latest one.</td></tr>'}
-  </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num pos"><b>${F(sum(st,s=>+s.paid))}</b></td><td class="num"><b>${F(sum(st,s=>+s.spend))}</b></td><td class="num"><b>${F(k.intPaid)}</b></td><td class="num"><b>${F(k.insPaid)}</b></td><td class="num"><b>${F(k.feesPaid)}</b></td><td colspan="3"></td></tr></tfoot></table></div>
+  return `<div class="tbl-wrap"><table><thead><tr><th>Statement</th><th class="num">Opening</th><th class="num">You paid</th><th class="num">New spending</th><th class="num">Interest</th><th class="num">Insurance</th><th class="num">Other fees</th><th class="num">Bank total</th><th class="num">Closing</th><th class="num">Minimum</th><th class="no-print"></th></tr></thead><tbody>
+  ${st.map(s=>`<tr><td class="nowrap"><b>${fmtDate(s.date)}</b>${s.note?`<div class="sub">${esc(s.note)}</div>`:''}<div>${(s.files||[]).map(fileChip).join('')}</div></td><td class="num">${F(s.opening)}</td><td class="num pos">${F(s.paid)}</td><td class="num">${F(s.spend)}</td><td class="num">${F(s.interest)}</td><td class="num">${F(s.insurance)}</td><td class="num">${+s.other?F(s.other):'<span class="muted">—</span>'}</td><td class="num">${F((+s.interest)+(+s.insurance)+(+s.other||0))}</td><td class="num"><b>${F(s.closing)}</b></td><td class="num">${s.minDue!=null&&s.minDue!==''?F(s.minDue):'<span class="muted">—</span>'}</td>
+    <td class="nowrap no-print"><button class="icon-btn" title="Edit" data-act="debt-stmt" data-b="${b.id}" data-s="${s.id}">✏️</button><button class="icon-btn" title="Delete" data-act="del-stmt" data-b="${b.id}" data-s="${s.id}">🗑</button></td></tr>`).join('')||'<tr><td colspan="11" class="empty">No statements yet — add your latest one.</td></tr>'}
+  </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num pos"><b>${F(sum(st,s=>+s.paid))}</b></td><td class="num"><b>${F(sum(st,s=>+s.spend))}</b></td><td class="num"><b>${F(k.intPaid)}</b></td><td class="num"><b>${F(k.insPaid)}</b></td><td class="num"><b>${F(k.othPaid)}</b></td><td class="num"><b>${F(k.feesPaid)}</b></td><td colspan="3"></td></tr></tfoot></table></div>
   <div class="hint">Add each monthly statement (19th) — it keeps the balance exact and shows what the bank charged. Attach the statement PDF to it.</div>`;
 }
 function debtPayments(b,k){
@@ -1293,7 +1293,8 @@ function debtStmtModal(bid,sid){
     <div><label>You paid (in this statement)</label><input type="number" step="0.01" min="0" name="paid" value="${paid}"></div>
     <div><label>New spending</label><input type="number" step="0.01" min="0" name="spend" value="${spend}"></div>
     <div><label>Interest charged</label><input type="number" step="0.01" min="0" name="interest" value="${s?.interest??est(+b.interestPct||0)}"></div>
-    <div><label>Insurance / other fees</label><input type="number" step="0.01" min="0" name="insurance" value="${s?.insurance??est(+b.insurancePct||0)}"></div>
+    <div><label>Insurance (Credit Shield)</label><input type="number" step="0.01" min="0" name="insurance" value="${s?.insurance??est(+b.insurancePct||0)}"></div>
+    <div><label>Other fees (late, cash advance, transfer…)</label><input type="number" step="0.01" min="0" name="other" value="${s?.other??0}"></div>
     <div><label>Closing balance (from statement)</label><input type="number" step="0.01" name="closing" value="${s?.closing??''}"></div>
     <div><label>Minimum due</label><input type="number" step="0.01" min="0" name="minDue" value="${s?.minDue??''}"></div>
     <div><label>Payment due date</label><input type="date" name="dueDate" value="${s?.dueDate||''}"></div>
@@ -1303,7 +1304,7 @@ function debtStmtModal(bid,sid){
   </div>`,
   onOpen(f){
     wireFiles(f);
-    const u=()=>{ const g=n=>+f.elements[n].value||0, calc=g('opening')-g('paid')+g('spend')+g('interest')+g('insurance');
+    const u=()=>{ const g=n=>+f.elements[n].value||0, calc=g('opening')-g('paid')+g('spend')+g('interest')+g('insurance')+g('other');
       if(!f.elements.closing.dataset.touched) f.elements.closing.value=calc.toFixed(2);
       if(!f.elements.minDue.dataset.touched) f.elements.minDue.value=(g('closing')*(+(b.minPct??3))/100).toFixed(2);
       if(!f.elements.dueDate.dataset.touched&&f.elements.date.value) f.elements.dueDate.value=monthDay(ymAdd(f.elements.date.value.slice(0,7),1),+b.dueDay||4);
@@ -1313,7 +1314,7 @@ function debtStmtModal(bid,sid){
     f.addEventListener('input',u); u();
   },
   async onSubmit(f){
-    const g=n=>+val(f,n)||0, d={date:val(f,'date'),opening:g('opening'),paid:g('paid'),spend:g('spend'),interest:g('interest'),insurance:g('insurance'),closing:g('closing'),minDue:val(f,'minDue')===''?null:g('minDue'),dueDate:val(f,'dueDate'),note:val(f,'note')};
+    const g=n=>+val(f,n)||0, d={date:val(f,'date'),opening:g('opening'),paid:g('paid'),spend:g('spend'),interest:g('interest'),insurance:g('insurance'),other:g('other'),closing:g('closing'),minDue:val(f,'minDue')===''?null:g('minDue'),dueDate:val(f,'dueDate'),note:val(f,'note')};
     if(!d.date){ toast('Enter the statement date'); return false; }
     const x=s||{id:uid(),files:[]}; Object.assign(x,d);
     x.files=await applyFiles(f,x.files,{bookId:b.id,stmtId:x.id,docType:'Bank Statement',title:`Statement ${fmtDate(d.date)}`,note:b.name});
