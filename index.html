@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003135526">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003135526">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003135526">
+<link rel="manifest" href="manifest.webmanifest?v=20261003140113">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003140113">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003140113">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1305,7 +1305,41 @@ function debtNotes(b,k){
     <tr><td class="muted">Monthly charges</td><td>interest ${b.interestPct||0}% + insurance ${b.insurancePct||0}%</td></tr>
     <tr><td class="muted">Minimum</td><td>${b.minPct??3}% of the statement</td></tr>
     <tr><td class="muted">Auto-debit</td><td>${esc(b.autoDebit||'—')}</td></tr></tbody></table></div>
-  <div class="card"><div class="row-flex"><h2>Notes & tips</h2><button class="btn sm" data-act="book-modal" data-b="${b.id}">Edit</button></div><div class="notes">${esc(b.notes||'No notes')}</div></div></div>`;
+  <div class="card"><div class="row-flex"><h2>Notes & tips</h2><button class="btn sm" data-act="book-modal" data-b="${b.id}">Edit</button></div><div class="notes">${esc(b.notes||'No notes')}</div></div>
+  <div class="card" style="grid-column:1/-1"><h2>📋 Every month — what to record</h2>
+    <div class="grid two" style="gap:18px">
+      <div>
+        <h3 style="margin:0 0 6px;font-size:14.5px">1 · Each payment you make <span class="sub">(any day, any amount)</span></h3>
+        <p class="sub" style="margin:0 0 6px">Tap <b>💳 Record payment</b> right after paying.</p>
+        <ul style="margin:0 0 12px;padding-left:18px;line-height:1.7">
+          <li><b>Date</b> — the day you paid · <b>Amount</b> — exactly what you paid</li>
+          <li><b>Reference</b> — optional (e.g. the bank transfer reference)</li>
+          <li>Paid in two parts? Record <b>each</b> one separately</li>
+          <li>The automatic <b>minimum debit</b> is a payment too — record it on the day it is taken</li>
+        </ul>
+        <h3 style="margin:0 0 6px;font-size:14.5px">2 · The monthly statement <span class="sub">(after the ${ordinal(+b.statementDay||19)})</span></h3>
+        <p class="sub" style="margin:0 0 6px">Tap <b>🧾 Add statement</b>, copy the figures, attach the statement PDF, Save. A ✅ shows when they add up; ⚠ means a typo or a refund to include.</p>
+        <h3 style="margin:12px 0 6px;font-size:14.5px">3 · Optional — big purchases before the statement</h3>
+        <p class="sub" style="margin:0">Tap <b>➕ New spending</b> so “Unbilled amount” and your plan stay accurate until the statement arrives.</p>
+      </div>
+      <div>
+        <h3 style="margin:0 0 6px;font-size:14.5px">Statement → app fields</h3>
+        <table><thead><tr><th>Statement says</th><th>Type it as</th></tr></thead><tbody>
+          <tr><td>Statement Date</td><td><b>Statement date</b></td></tr>
+          <tr><td>Previous Statement Balance</td><td><b>Opening</b> <span class="sub">(auto-filled)</span></td></tr>
+          <tr><td>Total Payment</td><td><b>You paid</b> <span class="sub">(auto-filled from your payments)</span></td></tr>
+          <tr><td>Purchases + Billed Installment</td><td><b>New spending</b></td></tr>
+          <tr><td>Remaining Balance Service Charge</td><td><b>Interest</b></td></tr>
+          <tr><td>Credit Shield Insurance Fee</td><td><b>Insurance</b></td></tr>
+          <tr><td>Cash advance / late / transfer fees</td><td><b>Other fees</b></td></tr>
+          <tr><td>Total Statement Balance</td><td><b>Closing balance</b></td></tr>
+          <tr><td>Minimum Amount Due · Payment Due Date</td><td><b>Minimum · Due date</b></td></tr>
+        </tbody></table>
+        <p class="hint">Only the summary box (one “Fees/Charges” total)? Keep the estimated interest/insurance and adjust until the ✅ appears.</p>
+      </div>
+    </div>
+    <div class="banner" style="margin:14px 0 0;background:var(--info-weak);color:var(--info);border-color:var(--info)">🔁 The app does the rest: moves the due date to the next cycle, shows your plan amount in <b>To do</b> before it is due, marks <b>Paid / Part paid / Overdue</b>, and updates the balance, debt-free date and fee totals.</div>
+  </div></div>`;
 }
 function debtStmtModal(bid,sid){
   const b=book(bid), s=sid?b.statements.find(x=>x.id===sid):null, cur=b.currency||'QAR';
