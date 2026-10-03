@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#4f6bed">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src 'none'; font-src 'none'; form-action 'none'; base-uri 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -1737,7 +1737,9 @@ const A = {
   lock:()=>{ lockNow(); return false; },
   'sync-create':()=>{ createDataFile(); return false; },
   'sync-open':()=>{ openDataFile(); return false; },
-  'sync-now':()=>{ SYNC.meta.mode==='handle'?syncNow(true):saveDataFileManual(); return false; },
+  'sync-now':()=>{ LIVE()?syncNow(true):saveDataFileManual(); return false; },
+  'ms-connect':()=>{ msLogin('connect',{chooseAccount:true}); return false; },
+  'ms-reauth':()=>{ LS.del('ms-auto'); msLogin('reauth'); return false; },
   'sync-save':()=>{ saveDataFileManual(); return false; },
   'sync-reconnect':()=>{ syncNow(true); return false; },
   'sync-off':()=>{ disconnectDataFile(); return false; },
@@ -2012,10 +2014,12 @@ function showSetup(legacy){
     <div class="lock-err" id="lock-err"></div>
     <button class="btn primary lock-btn" type="submit">🔒 Encrypt & continue</button>
     ${legacy?'':`<div class="lock-alt"><div class="sub">Already using this app on another device?</div>
+      ${GRAPH_OK?'<button type="button" class="btn primary lock-btn" id="ms-open">☁️ Open my data from OneDrive</button>':''}
       <button type="button" class="btn lock-btn" id="open-existing">📂 I already have a data file — open it</button></div>`}
     ${DB.memory?'<div class="banner" style="margin:0">⚠️ This browser cannot keep data on its own. Open your OneDrive data file each time and save it back after changes.</div>':''}
   </form></div>`);
   document.getElementById('open-existing')?.addEventListener('click',()=>openExistingAtStart());
+  document.getElementById('ms-open')?.addEventListener('click',()=>msLogin('open-start',{chooseAccount:true}));
   const f=document.querySelector('.lock-card'), err=document.getElementById('lock-err');
   wireEyes(f); f.elements.pw.focus();
   f.elements.pw.oninput=()=>{ const v=f.elements.pw.value, s=pwStrength(v), [l,c]=STRENGTH[s], bar=f.querySelector('.pw-meter i');
@@ -2086,9 +2090,10 @@ async function applyDataFile(d,key){
 function markDirty(){
   if(!SYNC.meta.mode) return;
   SYNC.meta.dirty=true; saveSyncMeta(); updateSyncTile();
-  if(SYNC.meta.mode==='handle'){ clearTimeout(SYNC.timer); SYNC.timer=setTimeout(()=>syncNow(),1500); }
+  if(LIVE()){ clearTimeout(SYNC.timer); SYNC.timer=setTimeout(()=>syncNow(),1500); }
 }
 async function ensurePerm(interactive){
+  if(SYNC.meta.mode==='graph'){ const ok=!!(await msToken()); SYNC.needPerm=!ok; updateSyncTile(); return ok; }
   const h=SYNC.handle, o={mode:'readwrite'}; if(!h) return false;
   try{
     if(await h.queryPermission(o)==='granted'){ SYNC.needPerm=false; return true; }
@@ -2099,34 +2104,150 @@ async function ensurePerm(interactive){
 async function readHandle(){ const f=await SYNC.handle.getFile(); return f.size ? parseDataFile(await f.text()) : null; }
 async function writeHandle(text){ const w=await SYNC.handle.createWritable(); await w.write(text); await w.close(); }
 
-/* two-way sync with the connected file (PC) */
+/* two-way sync with the connected file (PC) or OneDrive online (iPhone) */
+const LIVE = () => SYNC.meta.mode==='handle' || SYNC.meta.mode==='graph';
 async function syncNow(interactive=false){
-  if(SYNC.busy||!S||SYNC.meta.mode!=='handle') return;
-  if(!(await ensurePerm(interactive))) return;
+  if(SYNC.busy||!S||!LIVE()) return;
+  if(SYNC.meta.mode==='graph' && !navigator.onLine){ updateSyncTile(); return; }
+  if(!(await ensurePerm(interactive))){ if(SYNC.meta.mode==='graph') autoReauth(); return; }
+  const graph=SYNC.meta.mode==='graph';
   SYNC.busy=true; updateSyncTile(); let again=true;
   try{
-    const remote=await readHandle().catch(()=>null), rRev=remote?.rev||0;
-    if(remote && rRev<=SYNC.meta.knownRev && !SYNC.meta.dirty) return;          // nothing new either side
+    if(graph && !SYNC.meta.dirty && SYNC.meta.eTag){ const m=await graphMeta(); if(m && m.eTag===SYNC.meta.eTag) return; }   // cheap "anything new?" check
+    const remote = graph ? await graphRead() : await readHandle().catch(()=>null), rRev=remote?.rev||0;
+    if(remote && rRev<=SYNC.meta.knownRev && !SYNC.meta.dirty){ await rememberETag(); return; }          // nothing new either side
     if(remote && rRev>SYNC.meta.knownRev){
-      if(!SYNC.meta.dirty){ const k=await keyForFile(remote); if(k){ await applyDataFile(remote,k); render(); toast(`☁️ Updated with changes from ${remote.device}`); } else again=false; return; }
+      if(!SYNC.meta.dirty){ const k=await keyForFile(remote); if(k){ await applyDataFile(remote,k); await rememberETag(); render(); toast(`☁️ Updated with changes from ${remote.device}`); } else again=false; return; }
       const c=await askChoice(`The data file was changed on ${remote.device} (${fmtDT(remote.saved)}), and this device also has changes that are not in the file yet.`,{title:'Changes on two devices',a:'Use the file version (discard my changes)',b:'Keep my version (overwrite the file)'});
-      if(c==='a'){ const k=await keyForFile(remote); if(k){ await applyDataFile(remote,k); render(); toast('Loaded the version from the data file'); } return; }
+      if(c==='a'){ const k=await keyForFile(remote); if(k){ await applyDataFile(remote,k); await rememberETag(); render(); toast('Loaded the version from the data file'); } return; }
       if(c!=='b'){ again=false; return; }
     }
-    const rev=Math.max(rRev,SYNC.meta.knownRev)+1;
-    await writeHandle(await buildDataFile(rev));
-    Object.assign(SYNC.meta,{knownRev:rev,dirty:false,lastSync:new Date().toISOString()}); await saveSyncMeta();
-  }catch(e){ console.error(e); again=false; toast('Could not save the data file: '+e.message); }
+    const rev=Math.max(rRev,SYNC.meta.knownRev)+1, text=await buildDataFile(rev);
+    const tag = graph ? await graphWrite(text) : (await writeHandle(text), SYNC.meta.eTag);
+    Object.assign(SYNC.meta,{knownRev:rev,dirty:false,lastSync:new Date().toISOString(),eTag:tag||''}); await saveSyncMeta();
+  }catch(e){
+    console.error(e); again=false;
+    if(e.auth){ SYNC.needPerm=true; autoReauth(); }
+    else if(!(e instanceof TypeError)) toast('Could not sync the data file: '+e.message);   // TypeError = no connection → retry later quietly
+  }
   finally{ SYNC.busy=false; updateSyncTile(); if(again && SYNC.meta.dirty){ clearTimeout(SYNC.timer); SYNC.timer=setTimeout(()=>syncNow(),1500); } }
 }
 async function syncStartup(interactive){
   updateSyncTile();
-  if(SYNC.meta.mode==='handle' && await ensurePerm(interactive)) syncNow();
+  if(PENDING_MS){ const m=PENDING_MS; PENDING_MS=null;
+    if(m.error) toast('OneDrive sign-in: '+m.error);
+    else if(m.intent==='connect'){ await connectGraph(); }
+  }
+  if(LIVE() && await ensurePerm(interactive)) syncNow();
+  else if(SYNC.meta.mode==='graph') autoReauth();
   if(!syncStartup.armed){
     syncStartup.armed=true;
-    setInterval(()=>{ if(S&&SYNC.meta.mode==='handle'&&!SYNC.needPerm) syncNow(); },60000);
-    addEventListener('focus',()=>{ if(S&&SYNC.meta.mode==='handle'&&!SYNC.needPerm) syncNow(); });
+    const poke=()=>{ if(S&&LIVE()&&!SYNC.needPerm) syncNow(); };
+    setInterval(poke,60000);
+    addEventListener('focus',poke); addEventListener('online',poke);
+    document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') poke(); else if(SYNC.meta.dirty&&SYNC.meta.mode==='graph') syncNow(); });
   }
+}
+
+/* ================= ONEDRIVE ONLINE SYNC (web / iPhone version only) =================
+   Active only on https with a client ID (filled in by iPhone Web App/build.js). The PC file:// app never uses it.
+   Sign-in: OAuth 2.0 authorization code + PKCE (no secrets). Only the encrypted data file is transferred. */
+const MS_CLIENT_ID='d4a3df4f-b33c-4d72-8d8d-6dd26e447f8b';
+const MS_AUTHORITY='https://login.microsoftonline.com/consumers/oauth2/v2.0';
+const MS_SCOPE='offline_access Files.ReadWrite';
+const GRAPH_ITEM='https://graph.microsoft.com/v1.0/me/drive/root:'+encodeURI('/My Financial Budget App/'+DATA_NAME);
+const GRAPH_OK = typeof location!=='undefined' && location.protocol==='https:' && !!MS_CLIENT_ID;
+let PENDING_MS=null;
+const redirectUri = () => location.origin+location.pathname.replace(/index\.html$/,'');
+const b64url = u8 => { let s=''; u8.forEach(c=>s+=String.fromCharCode(c)); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); };
+const LS={get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch{ return null; } },set(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch{} },del(k){ try{ localStorage.removeItem(k); }catch{} }};
+
+async function msLogin(intent,{chooseAccount=false}={}){
+  const verifier=b64url(crypto.getRandomValues(new Uint8Array(48)));
+  const challenge=b64url(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
+  const state=b64url(crypto.getRandomValues(new Uint8Array(16)));
+  LS.set('ms-pkce',{verifier,state,intent,at:Date.now()});
+  const q=new URLSearchParams({client_id:MS_CLIENT_ID,response_type:'code',redirect_uri:redirectUri(),response_mode:'query',scope:MS_SCOPE,code_challenge:challenge,code_challenge_method:'S256',state});
+  if(chooseAccount) q.set('prompt','select_account');
+  location.assign(`${MS_AUTHORITY}/authorize?${q}`);
+}
+async function msTokenRequest(params){
+  const r=await fetch(`${MS_AUTHORITY}/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:MS_CLIENT_ID,scope:MS_SCOPE,...params})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error_description?.split('\r\n')[0]||j.error||'Sign-in failed');
+  const auth={access:j.access_token,refresh:j.refresh_token,exp:Date.now()+((j.expires_in||3600)-120)*1000};
+  await DB.put('kv','ms-auth',auth); return auth;
+}
+/* back from the Microsoft sign-in page? swap the code for tokens */
+async function msHandleRedirect(){
+  const p=new URLSearchParams(location.search); if(!p.has('code')&&!p.has('error')) return null;
+  const pk=LS.get('ms-pkce'); LS.del('ms-pkce'); history.replaceState(null,'',redirectUri());
+  if(p.has('error')) return {error:p.get('error_description')||p.get('error'),intent:pk?.intent};
+  if(!pk||pk.state!==p.get('state')) return {error:'Sign-in could not be verified — please try again.'};
+  try{ await msTokenRequest({grant_type:'authorization_code',code:p.get('code'),redirect_uri:redirectUri(),code_verifier:pk.verifier}); LS.del('ms-auto'); return {ok:true,intent:pk.intent}; }
+  catch(e){ return {error:e.message,intent:pk.intent}; }
+}
+async function msToken(){
+  let a=await DB.get('kv','ms-auth'); if(!a) return null;
+  if(a.exp>Date.now()) return a.access;
+  if(!navigator.onLine) return a.access;   // offline: let the request fail quietly, retry later
+  try{ a=await msTokenRequest({grant_type:'refresh_token',refresh_token:a.refresh}); return a.access; }catch{ return null; }
+}
+async function gFetch(url,opt={}){
+  const t=await msToken(); if(!t) throw Object.assign(new Error('Sign in to OneDrive again'),{auth:true});
+  const r=await fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+t}});
+  if(r.status===401){ await DB.del('kv','ms-auth'); throw Object.assign(new Error('Sign in to OneDrive again'),{auth:true}); }
+  return r;
+}
+async function graphMeta(){ const r=await gFetch(GRAPH_ITEM+'?select=eTag,lastModifiedDateTime,size'); if(r.status===404) return null; if(!r.ok) throw new Error('OneDrive error '+r.status); return r.json(); }
+async function graphRead(){ const r=await gFetch(GRAPH_ITEM+':/content'); if(r.status===404) return null; if(!r.ok) throw new Error('OneDrive error '+r.status); const t=await r.text(); return t.trim()?parseDataFile(t):null; }
+async function graphWrite(text){
+  const blob=new Blob([text],{type:'application/json'});
+  if(blob.size<4e6){
+    const r=await gFetch(GRAPH_ITEM+':/content',{method:'PUT',headers:{'Content-Type':'application/json'},body:blob});
+    if(!r.ok) throw new Error('OneDrive upload failed ('+r.status+')'); return (await r.json()).eTag;
+  }
+  const s=await gFetch(GRAPH_ITEM+':/createUploadSession',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({item:{'@microsoft.graph.conflictBehavior':'replace'}})});
+  if(!s.ok) throw new Error('OneDrive upload failed ('+s.status+')');
+  const {uploadUrl}=await s.json(), CH=320*1024*10; let res;
+  for(let i=0;i<blob.size;i+=CH){
+    const part=blob.slice(i,i+CH);
+    res=await fetch(uploadUrl,{method:'PUT',headers:{'Content-Range':`bytes ${i}-${i+part.size-1}/${blob.size}`},body:part});
+    if(!res.ok) throw new Error('OneDrive upload failed ('+res.status+')');
+  }
+  return (await res.json()).eTag;
+}
+async function rememberETag(){ if(SYNC.meta.mode==='graph'){ try{ SYNC.meta.eTag=(await graphMeta())?.eTag||''; await saveSyncMeta(); }catch{} } }
+/* connect this device to OneDrive sync (after sign-in) */
+async function connectGraph(){
+  try{
+    const remote=await graphRead();
+    SYNC.handle=null; Object.assign(SYNC.meta,{mode:'graph',fileName:'OneDrive › My Financial Budget App'});
+    if(remote){
+      const same = CRYPTO.key && await CRYPTO.decState(CRYPTO.key,remote.box).then(()=>true,()=>false);
+      if(!same || remote.rev>SYNC.meta.knownRev){
+        if(!(await askConfirm(`Load your data from OneDrive (saved ${fmtDT(remote.saved)} on ${remote.device})?\n\nThe data on this device will be replaced by the OneDrive version.`,{title:'Use OneDrive data?',ok:'Load from OneDrive',danger:false}))){ SYNC.meta.mode=null; await saveSyncMeta(); return; }
+        const k=await keyForFile(remote); if(!k){ SYNC.meta.mode=null; await saveSyncMeta(); return; }
+        await applyDataFile(remote,k);
+      }
+      await rememberETag();
+    } else { SYNC.meta.knownRev=0; SYNC.meta.dirty=true; }
+    await saveSyncMeta(); await syncNow(); render(); toast('☁️ OneDrive connected — changes now sync automatically');
+  }catch(e){ toast('OneDrive: '+e.message); }
+}
+/* new phone: sign in, then open the data file straight from OneDrive */
+async function openFromOneDriveAtStart(){
+  let d; try{ d=await graphRead(); }catch(e){ return toast('OneDrive: '+e.message); }
+  if(!d) return toast('No data file found in OneDrive › My Financial Budget App');
+  const k=await keyForFile(d); if(!k) return;
+  SYNC.handle=null; Object.assign(SYNC.meta,{mode:'graph',fileName:'OneDrive › My Financial Budget App'});
+  await applyDataFile(d,k); await rememberETag();
+  gate(''); await startApp(true); toast(`☁️ Opened from OneDrive — saved ${fmtDT(d.saved)} on ${d.device}`);
+}
+function autoReauth(){
+  const last=+(LS.get('ms-auto')||0);
+  if(Date.now()-last<10*60000||!navigator.onLine){ SYNC.needPerm=true; updateSyncTile(); return; }
+  LS.set('ms-auto',Date.now()); toast('Reconnecting to OneDrive…'); setTimeout(()=>msLogin('reauth'),900);
 }
 
 /* pick a file: real file handle on PC, plain picker elsewhere */
@@ -2183,11 +2304,17 @@ async function saveDataFileManual(){
 }
 async function disconnectDataFile(){
   if(!(await askConfirm('Stop syncing with the data file? Your data stays on this device and the file stays in OneDrive.',{title:'Disconnect data file?',ok:'Disconnect',danger:false}))) return;
-  SYNC.meta={mode:null,knownRev:0,dirty:false,lastSync:null,fileName:'',remoteDevice:''}; SYNC.handle=null; await DB.del('kv','sync-handle'); await saveSyncMeta(); render();
+  SYNC.meta={mode:null,knownRev:0,dirty:false,lastSync:null,fileName:'',remoteDevice:''}; SYNC.handle=null; await DB.del('kv','sync-handle'); await DB.del('kv','ms-auth'); await saveSyncMeta(); render();
 }
 function syncState(){
   const m=SYNC.meta;
   if(!m.mode) return {cls:'off',icon:'☁️',t:'Not synced',s:'Set up OneDrive data file',act:'go" data-page="settings'};
+  if(m.mode==='graph'){
+    if(SYNC.needPerm) return {cls:'warn',icon:'⚠️',t:'Sign in to OneDrive',s:'Tap to reconnect sync',act:'ms-reauth'};
+    if(!navigator.onLine) return {cls:m.dirty?'warn':'off',icon:'📴',t:m.dirty?'Offline — will sync later':'Offline',s:'OneDrive · automatic',act:'sync-now'};
+    if(SYNC.busy||m.dirty) return {cls:'busy',icon:'🔄',t:'Syncing with OneDrive…',s:'Automatic',act:'sync-now'};
+    return {cls:'',icon:'✅',t:'Synced · '+ago(m.lastSync),s:'OneDrive · automatic',act:'sync-now'};
+  }
   if(m.mode==='handle'){
     if(SYNC.needPerm) return {cls:'warn',icon:'⚠️',t:'Reconnect data file',s:'Tap to allow saving',act:'sync-reconnect'};
     if(SYNC.busy||m.dirty) return {cls:'busy',icon:'🔄',t:'Saving to OneDrive…',s:m.fileName,act:'sync-now'};
@@ -2204,17 +2331,18 @@ function updateSyncTile(){
 function syncSettingsHTML(){
   const m=SYNC.meta;
   const status = !m.mode ? '<b>Not set up.</b> Your data is only in this browser.'
+    : m.mode==='graph' ? `<b>OneDrive connected</b> — syncs automatically · ${SYNC.needPerm?'<b class="neg">sign-in needed</b>':m.dirty?'syncing…':'synced '+ago(m.lastSync)} · revision ${m.knownRev}`
     : m.mode==='handle' ? `<b>Connected:</b> ${esc(m.fileName)} · ${SYNC.needPerm?'<b class="neg">needs reconnect</b>':m.dirty?'saving…':'saved '+ago(m.lastSync)} · revision ${m.knownRev}`
     : `<b>Manual file mode</b> (this device can't auto-save) · ${m.dirty?'<b class="neg">unsaved changes</b>':'last saved/loaded '+ago(m.lastSync)}`;
   return `<p class="sub">Keep one <b>encrypted</b> data file (<code>${DATA_NAME}</code>) in your OneDrive folder. OneDrive syncs it; this app never goes online. Open it on any PC or phone with your master password.</p>
   <div class="banner" style="background:var(--panel2);color:var(--text);border-color:var(--line)">${status}</div>
   <div class="toolbar">
     ${FSA?`<button class="btn primary" data-act="sync-create">☁️ Create data file in OneDrive folder</button><button class="btn" data-act="sync-open">📂 Connect existing data file</button>${m.mode==='handle'?'<button class="btn" data-act="sync-now">🔄 Sync now</button>':''}`
-      :`<button class="btn primary" data-act="sync-open">📂 Open data file</button><button class="btn" data-act="sync-save">💾 Save data file</button>`}
+      :`${GRAPH_OK?(m.mode==='graph'?'<button class="btn primary" data-act="sync-now">🔄 Sync now</button>':'<button class="btn primary" data-act="ms-connect">☁️ Connect OneDrive (automatic sync)</button>'):''}<button class="btn" data-act="sync-open">📂 Open data file</button><button class="btn" data-act="sync-save">💾 Save data file</button>`}
     ${m.mode?'<button class="btn danger" data-act="sync-off">Disconnect</button>':''}
   </div>
   <div class="grid two" style="margin-top:6px"><div class="sub"><b>On this PC</b> (Chrome / Edge): click <i>Create data file</i> and save it inside <code>OneDrive › My Financial Budget App</code> (next to this app). After that every change is saved automatically. Opening another PC? Use <i>Connect existing data file</i>.</div>
-  <div class="sub"><b>On your phone:</b> open this app → <i>📂 I already have a data file</i> (or Settings → Open data file) → pick <code>${DATA_NAME}</code> from OneDrive → log in. After making changes tap <b>💾 Save data file</b> → choose <b>OneDrive</b> → replace the old file.</div></div>`;
+  <div class="sub"><b>On your phone:</b> open the Home Screen app → <i>☁️ Open my data from OneDrive</i> → sign in with Microsoft → log in. Everything then syncs automatically. (Without signing in: <i>📂 I already have a data file</i> (or Settings → Open data file) → pick <code>${DATA_NAME}</code> from OneDrive → log in. After making changes tap <b>💾 Save data file</b> → choose <b>OneDrive</b> → replace the old file.)</div></div>`;
 }
 /* 3-choice dialog */
 function askChoice(msg,{title='Choose',a='A',b='B'}={}){
@@ -2285,9 +2413,13 @@ if('serviceWorker' in navigator && location.protocol==='https:') navigator.servi
   try{
     if(!window.crypto?.subtle) throw new Error('This browser cannot do secure encryption for local files. Please open it in Chrome or Edge.');
     await DB.open();
+    PENDING_MS = GRAPH_OK ? await msHandleRedirect() : null;
     const vault=await DB.get('kv','vault');
     if(vault){ if(!(await resumeSession(vault))) showLock(vault); }
-    else showSetup(await DB.get('kv','state'));
+    else {
+      showSetup(await DB.get('kv','state'));
+      if(PENDING_MS?.intent==='open-start'){ const m=PENDING_MS; PENDING_MS=null; if(m.error) toast('OneDrive sign-in: '+m.error); else openFromOneDriveAtStart(); }
+    }
   }catch(err){
     console.error(err);
     gate(`<div class="lock"><div class="lock-card"><div class="lock-logo">⚠️</div><h1>Cannot start</h1><p class="sub">${esc(err.message)}</p></div></div>`);
