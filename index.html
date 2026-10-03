@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003134841">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003134841">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003134841">
+<link rel="manifest" href="manifest.webmanifest?v=20261003135136">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003135136">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003135136">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -140,6 +140,8 @@ input[type=password]{background:var(--panel);border:1px solid var(--line);border
 .btn.sm{padding:4px 9px;font-size:12.5px}
 .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .toolbar .sp{flex:1}
+.grid + .toolbar,.card + .toolbar,.banner + .toolbar{margin-top:16px}
+.toolbar + .tabs{margin-top:8px}
 input[type=text],input[type=number],input[type=date],input[type=month],input[type=search],select,textarea{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;width:100%}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-weak);border-color:var(--accent)}
 .toolbar input,.toolbar select{width:auto}
@@ -1287,7 +1289,7 @@ function debtStmtModal(bid,sid){
   const paid=s?.paid??Math.round(sum(b.txns.filter(x=>x.type==='payment'&&win(x)),x=>+x.amount)*100)/100;
   const spend=s?.spend??Math.round(sum(b.txns.filter(x=>x.type!=='payment'&&win(x)),x=>+x.amount)*100)/100;
   const est=v=>Math.round(opening*v)/100;
-  modal({title:`${s?'Edit':'Add'} statement — ${esc(b.name)}`,body:`<div class="form">
+  modal({onDelete:s?()=>A['del-stmt']({b:b.id,s:s.id}):null,title:`${s?'Edit':'Add'} statement — ${esc(b.name)}`,body:`<div class="form">
     <div><label>Statement date</label><input type="date" name="date" value="${defDate}"></div>
     <div><label>Opening balance (${cur})</label><input type="number" step="0.01" name="opening" value="${opening}"></div>
     <div><label>You paid (in this statement)</label><input type="number" step="0.01" min="0" name="paid" value="${paid}"></div>
@@ -1324,7 +1326,7 @@ function debtStmtModal(bid,sid){
 }
 function debtTxnModal(bid,tid,preset={}){
   const b=book(bid), x=tid?b.txns.find(t=>t.id===tid):null, cur=b.currency||'QAR', type=x?.type||preset.type||'payment';
-  modal({title:`${x?'Edit':'Record'} ${TXN_LABEL[type].toLowerCase()} — ${esc(b.name)}`,body:`<div class="form">
+  modal({onDelete:x?()=>A['del-txn']({b:b.id,t:x.id}):null,title:`${x?'Edit':'Record'} ${TXN_LABEL[type].toLowerCase()} — ${esc(b.name)}`,body:`<div class="form">
     <div><label>Type</label><select name="type">${['payment','charge','fee'].map(t=>`<option value="${t}" ${t===type?'selected':''}>${TXN_LABEL[t]}</option>`).join('')}</select></div>
     <div><label>Date *</label><input type="date" name="date" value="${x?.date||today()}"></div>
     <div><label>Amount (${cur}) *</label><input type="number" step="0.01" min="0" name="amount" value="${x?.amount??(preset.amount&&+preset.amount>0?(+preset.amount).toFixed(2):'')}"></div>
@@ -1523,14 +1525,15 @@ function askConfirm(msg,{title='Are you sure?',ok='Delete',danger=true}={}){
     root.querySelector('[data-c="0"]').focus();
   });
 }
-function modal({title,body,submit='Save',wide=false,onSubmit,onOpen,extraFoot=''}){
+function modal({title,body,submit='Save',wide=false,onSubmit,onOpen,extraFoot='',onDelete=null}){
   const root=$('#modal-root');
   root.innerHTML=`<div class="overlay"><form class="modal ${wide?'wide':''}" novalidate>
     <header><h3>${title}</h3><button type="button" class="icon-btn" data-close>✕</button></header>
     <div class="body">${body}</div>
-    <footer>${extraFoot}<span style="flex:1"></span><button type="button" class="btn" data-close>Cancel</button>${submit?`<button class="btn primary" type="submit">${submit}</button>`:''}</footer></form></div>`;
+    <footer>${onDelete?'<button type="button" class="btn danger" data-mdel>🗑 Delete</button>':''}${extraFoot}<span style="flex:1"></span><button type="button" class="btn" data-close>Cancel</button>${submit?`<button class="btn primary" type="submit">${submit}</button>`:''}</footer></form></div>`;
   const form=root.querySelector('form');
   root.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeModal);
+  root.querySelector('[data-mdel]')?.addEventListener('click',async()=>{ if(await onDelete()!==false){ closeModal(); render(); } });
   root.querySelector('.overlay').addEventListener('mousedown',e=>{ if(e.target.classList.contains('overlay')) closeModal(); });
   form.onsubmit=async e=>{ e.preventDefault(); const btn=form.querySelector('[type=submit]'); if(btn) btn.disabled=true;
     try{ const r=await onSubmit?.(form); if(r!==false){ closeModal(); render(); } }
@@ -1714,7 +1717,7 @@ function itemModal(bid,iid){
 }
 function payModal(bid,iid,pid){
   const c=book(bid), it=c.items.find(i=>i.id===iid), p=pid?it.payments.find(x=>x.id===pid):null, k=calc(it), foreign=it.currency!=='LKR';
-  modal({title:`${p?'Edit':'Record'} payment — ${esc(it.title)}`,submit:'Save payment',body:`
+  modal({onDelete:p?()=>A['del-pay']({b:c.id,i:it.id,p:p.id}):null,title:`${p?'Edit':'Record'} payment — ${esc(it.title)}`,submit:'Save payment',body:`
   <div class="sub" style="margin-bottom:12px">${esc(c.name)} · Due ${fmtDate(it.dueDate)} · Amount ${fmt(it.amount,it.currency)} · Balance ${fmt(k.remaining,it.currency)}${it.invoiceNo?' · Invoice '+esc(it.invoiceNo):''}</div>
   <div class="form">
     <div><label>Payment date *</label><input type="date" name="date" value="${p?.date||today()}"></div>
@@ -1817,7 +1820,7 @@ function savTxnModal(bid,tid,preset={}){
   const b=book(bid), x=tid?b.txns.find(t=>t.id===tid):null, cur=b.currency||'LKR';
   const type=x?.type||preset.type||'deposit';
   const defDate = x?.date || (preset.ym && preset.ym!==ymNow() && preset.ym<ymNow() ? monthDay(preset.ym,b.day||1) : today());
-  modal({title:`${x?'Edit':'Record'} ${txnLabel(b,type).toLowerCase()} — ${esc(b.name)}`,body:`<div class="form">
+  modal({onDelete:x?()=>A['del-txn']({b:b.id,t:x.id}):null,title:`${x?'Edit':'Record'} ${txnLabel(b,type).toLowerCase()} — ${esc(b.name)}`,body:`<div class="form">
     <div><label>Type</label><select name="type">${txnTypes(b).map(k=>`<option value="${k}" ${k===type?'selected':''}>${txnLabel(b,k)}</option>`).join('')}</select></div>
     <div><label>Date *</label><input type="date" name="date" value="${defDate}"></div>
     <div><label>Amount (${cur}) *</label><input type="number" step="0.01" min="0" name="amount" value="${x?.amount??(preset.amount||(type==='deposit'?b.monthly||'':''))}"></div>
@@ -1884,7 +1887,7 @@ function expTxnModal(bid,tid,preset={}){
   const line=b.lines.find(l=>l.id===lineId);
   const defDate = x?.date || (ym===ymNow() ? today() : (line?.isBill ? monthDay(ym,line.dueDay) : monthDay(ym,1)));
   const active=b.lines.filter(l=>lineActive(l,ym)||l.id===lineId);
-  modal({title:`${x?'Edit':'Add'} expense — ${esc(b.name)}`,body:`<div class="form">
+  modal({onDelete:x?()=>A['del-txn']({b:b.id,t:x.id}):null,title:`${x?'Edit':'Add'} expense — ${esc(b.name)}`,body:`<div class="form">
     <div><label>Budget line</label><select name="lineId">${active.map(l=>`<option value="${l.id}" ${l.id===lineId?'selected':''}>${esc(l.name)}${l.isBill?' (bill)':''}</option>`).join('')}<option value="" ${!lineId&&!line?'selected':''}>— Unplanned / other —</option></select></div>
     <div><label>Date *</label><input type="date" name="date" value="${defDate}"></div>
     <div><label>Amount (${cur}) *</label><input type="number" step="0.01" min="0" name="amount" value="${x?.amount??(preset.amount&&+preset.amount>0?preset.amount:'')}"></div>
