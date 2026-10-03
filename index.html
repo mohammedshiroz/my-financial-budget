@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003155311">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003155311">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003155311">
+<link rel="manifest" href="manifest.webmanifest?v=20261003160033">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003160033">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003160033">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -649,10 +649,14 @@ function savCalc(b){
   const missed=months.filter(x=>x.status==='overdue');
   let monthsLeft=null, required=null;
   if(b.targetDate && remaining>0){ monthsLeft=Math.max(1,ymRange(now,b.targetDate.slice(0,7)).length); required=remaining/monthsLeft; }
-  const finish = target && remaining<=0 ? 'reached' : (target && monthly>0 ? monthDay(ymAdd(now,Math.ceil(remaining/monthly)-1),b.day||1) : null);
+  const elapsed=Math.max(1,ymRange(start,now<start?start:now).length);
+  const avgWd=wd/elapsed, avgInt=intr/elapsed, netMonthly=monthly-avgWd+avgInt;
+  const finish = target && remaining<=0 ? 'reached' : (target && netMonthly>0 ? monthDay(ymAdd(now,Math.ceil(remaining/netMonthly)-1),b.day||1) : null);
+  const eoyMonths=ymRange(ymAdd(now,1),now.slice(0,4)+'-12').length;
+  const proj12=balance+12*netMonthly, projEoy=balance+eoyMonths*netMonthly;
   const needNow = cm && (cm.status!=='paid'&&cm.status!=='waived') ? cm.short : 0;
   return {cur,r,dep,wd,intr,balance,target,remaining,pct,monthly,months,cm,missed,monthsLeft,required,finish,
-    balanceLKR:balance*r, targetLKR:target*r, needNow, needNowLKR:needNow*r, missedAmt:sum(missed,x=>x.short)};
+    avgWd,avgInt,netMonthly,proj12,projEoy,eoyMonths,balanceLKR:balance*r, targetLKR:target*r, needNow, needNowLKR:needNow*r, missedAmt:sum(missed,x=>x.short)};
 }
 
 /* ================= CREDIT CARD / LOAN ================= */
@@ -1131,7 +1135,11 @@ function renderSaving(b){
     <div class="card kpi"><div class="l">Target</div><div class="v">${k.target?fmt(k.target,cur):'—'}</div><div class="s">${b.targetDate?'by '+fmtDate(b.targetDate):'No target date'}</div></div>
     <div class="card kpi"><div class="l">Still needed</div><div class="v">${fmt(k.remaining,cur)}</div><div class="s">${k.required!=null?`Need ${fmt(Math.ceil(k.required),cur)}/month for ${k.monthsLeft} month(s)`:''}</div></div>
     <div class="card kpi warn"><div class="l">This month (${MON[+ymNow().slice(5)-1]})</div><div class="v">${k.cm?`${fmt(k.cm.deposited,cur)}`:'—'}</div><div class="s">${k.cm?`of ${fmt(k.cm.planned,cur)} planned · due ${fmtDate(k.cm.due)} ${badge(k.cm.status,'saving')}`:'No contribution planned'}</div></div>
-    <div class="card kpi"><div class="l">Projection</div><div class="v" style="font-size:17px">${k.finish==='reached'?'🎉 Reached':k.finish?fmtDate(k.finish):'—'}</div><div class="s">${k.finish&&k.finish!=='reached'?`at ${fmt(k.monthly,cur)}/month${b.targetDate?(k.finish<=b.targetDate?' · on track ✅':' · later than target ⚠'):''}`:k.monthly?'':'Set a monthly amount'}</div></div>
+    <div class="card kpi"><div class="l">Projection</div>
+      <div class="v" style="font-size:17px">${k.finish==='reached'?'🎉 Target reached':k.finish?'Target '+fmtDate(k.finish):k.monthly||k.balance?'≈ '+fmt(Math.round(k.proj12),cur):'—'}</div>
+      <div class="s">${k.finish&&k.finish!=='reached'?`saving ≈ ${fmt(Math.round(k.netMonthly),cur)}/month net${b.targetDate?(k.finish<=b.targetDate?' · on track ✅':' · later than target ⚠'):''}<br>`:''}${!k.finish&&(k.monthly||k.balance)?`in 12 months (${ymLabel(ymAdd(ymNow(),12))})<br>`:''}${k.eoyMonths?`by Dec ${ymNow().slice(0,4)}: ≈ ${fmt(Math.round(k.projEoy),cur)}<br>`:''}
+        Withdrawn so far <b class="neg">−${fmt(k.wd,cur)}</b>${k.wd?` (≈ ${fmt(Math.round(k.avgWd*100)/100,cur)}/month)`:''}<br>
+        Net per month ≈ ${fmt(Math.round(k.netMonthly),cur)} = plan ${fmt(k.monthly,cur)} − withdrawals${k.avgInt?' + profit':''}</div></div>
   </div>
   <div class="card" style="margin-top:14px;padding:12px 16px" class="sub"><span class="sub">Deposits ${fmt(k.dep,cur)} · Interest ${fmt(k.intr,cur)} · Withdrawals ${fmt(k.wd,cur)} · Plan ${k.monthly?fmt(k.monthly,cur)+' on day '+(b.day||1)+' each month':'not set'}</span></div>
   ${tabsHtml([['plan','📅 Monthly plan'],['txns','💳 Transactions'],['docs','📁 Documents'],['overview','ℹ️ Overview']])}
