@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003160212">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003160212">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003160212">
+<link rel="manifest" href="manifest.webmanifest?v=20261003162622">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003162622">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003162622">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -170,7 +170,7 @@ tr.row.open td{background:var(--accent-weak)}
 .b-paid,.b-ok{background:var(--ok-weak);color:var(--ok)} .b-overdue,.b-over{background:var(--bad-weak);color:var(--bad)}
 .b-due-soon{background:var(--warn-weak);color:var(--warn)} .b-partial{background:var(--info-weak);color:var(--info)}
 .b-upcoming,.b-unused{background:var(--gray-weak);color:var(--muted)} .b-waived{background:var(--gray-weak);color:var(--muted)}
-.b-deposit,.b-interest{background:var(--ok-weak);color:var(--ok)} .b-withdrawal{background:var(--bad-weak);color:var(--bad)} .b-payout{background:var(--info-weak);color:var(--info)} .b-payment{background:var(--ok-weak);color:var(--ok)} .b-charge{background:var(--bad-weak);color:var(--bad)} .b-fee{background:var(--warn-weak);color:var(--warn)} .b-none{background:var(--gray-weak);color:var(--muted)}
+.b-deposit,.b-interest{background:var(--ok-weak);color:var(--ok)} .b-withdrawal{background:var(--bad-weak);color:var(--bad)} .b-payout{background:var(--info-weak);color:var(--info)} .b-carried{background:var(--info-weak);color:var(--info)} .b-payment{background:var(--ok-weak);color:var(--ok)} .b-charge{background:var(--bad-weak);color:var(--bad)} .b-fee{background:var(--warn-weak);color:var(--warn)} .b-none{background:var(--gray-weak);color:var(--muted)}
 .chit-strip{display:flex;gap:3px;flex-wrap:wrap;margin-top:10px}
 .chit-strip span{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:var(--gray-weak);color:var(--muted)}
 .chit-strip span.paid{background:var(--ok);color:#fff} .chit-strip span.overdue{background:var(--bad);color:#fff} .chit-strip span.now{outline:2px solid var(--accent)}
@@ -347,7 +347,7 @@ const DEFAULT_SECTIONS = [
 const LABELS = {
   course:{paid:'Paid',partial:'Partially paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'Waived'},
   saving:{paid:'Saved',partial:'Partly saved',overdue:'Missed','due-soon':'Due soon',upcoming:'Planned',waived:'Target reached'},
-  bill:{paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'—'},
+  bill:{carried:'Carried to next bill',paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'—'},
   budget:{ok:'Within budget',over:'Over budget',unused:'Nothing spent'},
 };
 const TXN_LABEL = {deposit:'Deposit',withdrawal:'Withdrawal',interest:'Interest / profit',payout:'Payout received',payment:'Payment',charge:'New spending',fee:'Bank fee'};
@@ -708,6 +708,13 @@ function debtCalc(b){
 }
 
 /* ================= EXPENSES ================= */
+/* balance brought into month m from earlier months (positive = still owed, negative = credit) */
+function lineCarryIn(b,l,m){
+  const start=l.startMonth||m; if(start>=m) return 0;
+  let bal=0; for(const x of ymRange(start,ymAdd(m,-1))){ if(!lineActive(l,x)) continue;
+    bal+=(+(l.overrides?.[x]??l.budget)||0)-sum((b.txns||[]).filter(t=>t.lineId===l.id&&t.date.slice(0,7)===x),t=>+t.amount); }
+  return Math.round(bal*100)/100;
+}
 const lineActive = (l,m) => (!l.startMonth||l.startMonth<=m) && (!l.endMonth||m<=l.endMonth);
 function expCalc(b,m){
   const cur=b.currency||'LKR', r=rate(cur);
@@ -716,7 +723,11 @@ function expCalc(b,m){
   const ids=new Set(lines.map(l=>l.id));
   const rows=lines.map(l=>{
     const spent=sum(tx.filter(x=>x.lineId===l.id),x=>+x.amount), budget=+(l.overrides?.[m] ?? l.budget)||0;
-    if(l.isBill){ const due=monthDay(m,l.dueDay); return {l,spent,budget,remaining:budget-spent,due,status:dateStatus(budget>0?spent>=budget-0.005:spent>0,spent>0,due)}; }
+    if(l.isBill){ const due=monthDay(m,l.dueDay);
+      if(l.carry){ const carryIn=lineCarryIn(b,l,m), owe=budget+carryIn-spent;
+        const status = owe<=0.005 ? 'paid' : (m<ymNow() ? 'carried' : dateStatus(false,spent>0,due));
+        return {l,spent,budget,carryIn,remaining:owe,due,status}; }
+      return {l,spent,budget,remaining:budget-spent,due,status:dateStatus(budget>0?spent>=budget-0.005:spent>0,spent>0,due)}; }
     return {l,spent,budget,remaining:budget-spent,status:spent>budget+0.005?'over':spent>0?'ok':'unused'};
   });
   const unplanned=sum(tx.filter(x=>!ids.has(x.lineId)),x=>+x.amount);
@@ -1516,7 +1527,7 @@ function lineHistoryModal(bid,lid){
     const chg=prev===null||due===prev?'':(due>prev?`<span class="neg">▲ +${F(due-prev)}</span>`:`<span class="pos">▼ −${F(prev-due)}</span>`); prev=due; totDue+=due; totPaid+=paid;
     return `<tr${m===ymNow()?' style="background:var(--accent-weak)"':''}><td class="nowrap"><b>${ymLabel(m)}</b></td>
       <td class="num"><input type="number" step="0.01" min="0" value="${due}" data-ov="${m}" style="width:110px;text-align:right" title="Amount for ${ymLabel(m)}"></td>
-      <td class="nowrap">${chg}</td>
+      <td class="nowrap">${chg}</td>${l.carry?`<td class="num ${(r?.carryIn||0)>0?'neg':(r?.carryIn||0)<0?'pos':'muted'}">${r?.carryIn?((r.carryIn>0?'+':'−')+F(Math.abs(r.carryIn))):'—'}</td>`:''}
       <td class="num">${paid?F(paid):'<span class="muted">—</span>'}</td>
       <td>${tx.map(t=>`<div class="lh-pay"><span class="chip" data-act="exp-txn" data-b="${b.id}" data-t="${t.id}" title="Edit payment">✏️ ${fmtDate(t.date)} · ${F(t.amount)}</span>
           ${(t.files||[]).map(fileChip).join('')}
@@ -1531,7 +1542,7 @@ function lineHistoryModal(bid,lid){
       <div class="card kpi"><div class="l">Total due</div><div class="v">${F(totDue)}</div></div>
       <div class="card kpi ${totPaid>=totDue-0.005?'ok':'warn'}"><div class="l">Total paid</div><div class="v">${F(totPaid)}</div><div class="s">${totPaid>=totDue-0.005?'All paid ✅':'Still due '+F(totDue-totPaid)}</div></div>
     </div>
-    <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th><th class="num">Paid</th><th>Paid on · receipts</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+    <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th>${l.carry?'<th class="num">Carried in</th>':''}<th class="num">Paid</th><th>Paid on · receipts</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
     <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it, <b>📎</b> to attach a receipt photo or PDF, or a receipt to view it. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
   extraFoot:`<button type="button" class="btn" id="lh-edit">✏️ Edit line</button>`,
   onOpen(f){
@@ -2010,6 +2021,7 @@ function lineModal(bid,lid){
     <div><label>Category</label><select name="category">${opts(catsFor(b),l?.category||'Other')}</select></div>
     <div><label>Monthly budget (${b.currency||'LKR'})</label><input type="number" step="0.01" min="0" name="budget" value="${l?.budget??''}"></div>
     <div class="full"><label><input type="checkbox" name="isBill" ${l?.isBill?'checked':''}> Fixed bill with a due date (rent, electricity, phone…) — tracks Paid / Overdue each month</label></div>
+    <div class="full"><label><input type="checkbox" name="carry" ${l?.carry?'checked':''}> Unpaid balance / credit carries over to the next bill (phone, utilities)</label></div>
     <div><label>Bill due day of month</label><input type="number" min="1" max="31" name="dueDay" value="${l?.dueDay||5}"></div>
     <div></div>
     <div><label>Active from (month)</label><input type="month" name="startMonth" value="${l?.startMonth||V.month||ymNow()}"></div>
@@ -2018,7 +2030,7 @@ function lineModal(bid,lid){
     <div class="full"><label>Notes</label><input type="text" name="notes" value="${esc(l?.notes||'')}"></div>
   </div>`,
   async onSubmit(f){
-    const d={name:val(f,'name'),category:val(f,'category'),budget:+val(f,'budget')||0,isBill:f.elements.isBill.checked,dueDay:Math.min(31,Math.max(1,+val(f,'dueDay')||1)),startMonth:val(f,'startMonth'),endMonth:val(f,'endMonth'),notes:val(f,'notes'),overrides:Object.fromEntries(val(f,'overrides').split(',').map(x=>x.split('=').map(s=>s.trim())).filter(([k,v])=>/^\d{4}-\d{2}$/.test(k)&&v!==''&&!isNaN(+v)).map(([k,v])=>[k,+v]))};
+    const d={name:val(f,'name'),category:val(f,'category'),budget:+val(f,'budget')||0,isBill:f.elements.isBill.checked,carry:f.elements.carry.checked,dueDay:Math.min(31,Math.max(1,+val(f,'dueDay')||1)),startMonth:val(f,'startMonth'),endMonth:val(f,'endMonth'),notes:val(f,'notes'),overrides:Object.fromEntries(val(f,'overrides').split(',').map(x=>x.split('=').map(s=>s.trim())).filter(([k,v])=>/^\d{4}-\d{2}$/.test(k)&&v!==''&&!isNaN(+v)).map(([k,v])=>[k,+v]))};
     if(!d.name){ toast('Name is required'); return false; }
     if(l) Object.assign(l,d); else b.lines.push({id:uid(),...d});
     await save(); toast('Budget line saved');
