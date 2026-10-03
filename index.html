@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003163739">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003163739">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003163739">
+<link rel="manifest" href="manifest.webmanifest?v=20261003190346">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003190346">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003190346">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -293,6 +293,34 @@ iframe.preview{width:100%;height:70vh;border:1px solid var(--line)}
 }
 @keyframes sheet{from{transform:translateY(40px);opacity:.4}}
 @media(max-width:400px){ .kpis{grid-template-columns:1fr} }
+.rep-filters{margin-bottom:14px}
+.rep-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:10px 12px;align-items:end}
+.rep-grid label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:600;color:var(--muted);min-width:0}
+.rep-grid label > input,.rep-grid label > select,.rep-grid label > .btn{width:100%;min-width:0;justify-content:center}
+.rep-secs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0}
+.rep-chip{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:99px;padding:5px 12px;font-size:12.5px;font-weight:600;cursor:pointer}
+.rep-chip:hover{border-color:var(--accent)}
+.rep-chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.rep-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.rep-head h2{margin:0}
+.rep-table td{padding:8px 10px}
+.rep-table th.sortable{cursor:pointer;user-select:none}
+.rep-table th.sortable:hover{color:var(--accent)}
+.rep-table tr.rep-grp td{background:var(--accent-weak)}
+.rep-table .bar{min-width:60px}
+.rep-ind{display:inline-block;width:18px}
+.rep-link{color:inherit;cursor:pointer;text-decoration:none;font-weight:600}
+.rep-link:hover{color:var(--accent);text-decoration:underline}
+.rep-more{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:13px}
+.print-only{display:none}
+.rep-page{page:report}
+@page report{size:A4 landscape;margin:10mm}
+@media print{
+  .print-only{display:block!important}
+  .rep-print-head{margin-bottom:10px} .rep-print-head h2{margin:0 0 4px}
+  .rep-table th,.rep-table td{padding:4px 6px;font-size:10px} .rep-page .tbl-wrap{overflow:visible} .rep-page .kpi .v{font-size:15px}
+  .rep-table tr{break-inside:avoid} .rep-table thead{display:table-header-group}
+}
 @media print{
   aside,.mobile-nav,.bottom-nav,.toolbar,.tabs,.no-print,.btn,.icon-btn{display:none!important}
   .app{display:block} main{padding:0} .card,.tbl-wrap{box-shadow:none;border-color:#ccc}
@@ -789,6 +817,8 @@ function renderSidebar(){
       <div class="sb-label">Sections</div>
       ${S.sections.map(group).join('')}
       <a class="nav-item" data-act="section-modal" title="Add section" style="color:var(--muted)"><span class="ni">＋</span><span class="nl">Add section</span></a>
+      <div class="sb-label">Reports</div>
+      ${item('reports','📑','Reports & export')}
     </nav>
     <div class="sb-foot">
       ${item('settings','⚙️','Settings & Backup',`<span class="ok-dot ${backupOk?'':'warn-dot'}" title="${bd===null?'No backup yet':'Last backup '+bd+' day(s) ago'}"></span>`)}
@@ -802,14 +832,14 @@ function renderSidebar(){
 function toggleDrawer(force){ const a=document.getElementById('sidebar'); a.classList.toggle('show',force??!a.classList.contains('show')); }
 function renderMobileChrome(){
   const b=V.page==='book'?book(V.bookId):null;
-  const title = b ? b.name : {dashboard:'Dashboard',documents:'Documents',settings:'Settings'}[V.page]||'My Financial Budget';
+  const title = b ? b.name : {dashboard:'Dashboard',documents:'Documents',reports:'Reports',settings:'Settings'}[V.page]||'My Financial Budget';
   const t=document.getElementById('mn-title'); if(t) t.textContent=title;
   const alerts=sum(S.books,x=>bookFlag(x).alerts);
   const it=(page,i,l,extra='')=>`<a class="${V.page===page?'active':''}" data-act="go" data-page="${page}"><span class="i">${i}</span>${l}${extra}</a>`;
   document.getElementById('bottom-nav').innerHTML =
     it('dashboard','📊','Home') + it('documents','📁','Docs') +
     `<a class="${V.page==='book'?'active':''}" onclick="toggleDrawer(true)"><span class="i">🗂️</span>Sections${alerts?`<span class="nb bad">${alerts}</span>`:''}</a>` +
-    it('settings','⚙️','Settings');
+    it('reports','📑','Reports') + it('settings','⚙️','Settings');
 }
 /* ================= ROUTER ================= */
 function render(){
@@ -823,6 +853,7 @@ function render(){
   else if(b && b.type==='expense') m.innerHTML=renderExpense(b);
   else if(b && b.type==='debt') m.innerHTML=renderDebt(b);
   else if(V.page==='documents') m.innerHTML=renderDocuments();
+  else if(V.page==='reports') m.innerHTML=renderReports();
   else if(V.page==='settings') m.innerHTML=renderSettings();
   else { V.page='dashboard'; m.innerHTML=renderDashboard(); }
 }
@@ -1657,6 +1688,473 @@ function fileChip(id){
   return `<span class="chip" data-act="view-file" data-f="${f.id}" title="${esc(f.name)}">${ic}<span>${esc(f.title||f.name)}</span></span>`;
 }
 
+/* ================= REPORTS =================
+   One ledger of every money record across all sections, filtered the same way for every report.
+   Exports are built here, offline: Excel (.xlsx written as a zip), PDF (drawn with the built-in Helvetica font), CSV and print. */
+const REP_DEF = {tab:'txns',preset:'thisYear',from:'',to:'',country:'ALL',secs:[],book:'',line:'',cat:'',flow:'',method:'',q:'',min:'',max:'',
+  group:'section',group2:'book',pivot:'section',measure:'out',cur:'LKR',status:'open',sort:'date',dir:'desc',limit:300};
+const REP = Object.assign({}, REP_DEF, UI.rep||{}, {limit:300, printAll:false});
+const saveRep = () => { const {printAll,limit,...keep}=REP; UI.rep=keep; saveUI(); };
+const REP_TABS = [['txns','💳 Transactions'],['summary','📊 Summary'],['monthly','📅 Month by month'],['dues','⏰ Bills & dues'],['balances','🏦 Balances']];
+const REP_PRESETS = {thisMonth:'This month',lastMonth:'Last month',last3:'Last 3 months',last6:'Last 6 months',last12:'Last 12 months',thisYear:'This year',lastYear:'Last year',all:'All time',custom:'Custom dates'};
+const FLOW_LABEL = {out:'Money out',in:'Money in',charge:'Card charges & fees'};
+const REP_DIMS = {
+  section:['Section',r=>r.sec], book:['Item',r=>r.book], item:['Budget line / detail',r=>r.item], cat:['Category',r=>r.cat||'—'],
+  type:['Type',r=>r.type], flow:['Money flow',r=>FLOW_LABEL[r.flow]], method:['Payment method',r=>r.method||'—'],
+  country:['Country',r=>COUNTRIES[r.country]?.name||r.country], cur:['Currency',r=>r.cur], month:['Month',r=>r.ym], year:['Year',r=>r.year]};
+const repCur = () => REP.cur==='QAR' ? 'QAR' : 'LKR';
+const repConv = lkr => repCur()==='LKR' ? lkr : (rate('QAR') ? lkr/rate('QAR') : 0);
+const repFmt = lkr => fmt(Math.round(repConv(lkr)*100)/100, repCur());
+const isNumCol = c => ['m','a','n','p'].includes(c.t);
+
+function repRange(){
+  const t=today(), now=ymNow(), y=+t.slice(0,4), back=n=>[ymAdd(now,-n)+'-01', monthDay(now,31)];
+  switch(REP.preset){
+    case 'thisMonth': return back(0);
+    case 'lastMonth': { const m=ymAdd(now,-1); return [m+'-01',monthDay(m,31)]; }
+    case 'last3': return back(2); case 'last6': return back(5); case 'last12': return back(11);
+    case 'thisYear': return [y+'-01-01',y+'-12-31'];
+    case 'lastYear': return [(y-1)+'-01-01',(y-1)+'-12-31'];
+    case 'custom': return [REP.from||'0000-01-01', REP.to||'9999-12-31'];
+    default: return ['0000-01-01','9999-12-31'];
+  }
+}
+function repRangeText(){
+  const [a,b]=repRange(), open=a<'1900', end=b>'9000';
+  if(open&&end) return 'All time';
+  return `${open?'Beginning':fmtDate(a)} – ${end?'today':fmtDate(b)}`;
+}
+
+/* every payment, deposit, expense… as one flat row */
+function repLedger(){
+  const out=[];
+  const add=(b,o)=>{ if(!o.date) return; const s=secOf(b), cur=o.cur||b.currency||(b.type==='debt'?'QAR':'LKR'), amount=+o.amount||0;
+    out.push({id:o.id,date:o.date,ym:o.date.slice(0,7),year:o.date.slice(0,4),b,bookId:b.id,book:b.name,secId:s.id,sec:s.name,secIcon:s.icon,kind:b.type,
+      country:countryOf(b),cur,amount,lkr:o.lkr ?? amount*rate(cur),item:o.item||'',lineKey:o.lineKey||'',cat:o.cat||'',type:o.type,flow:o.flow,
+      method:o.method||'',ref:o.ref||'',note:o.note||'',files:o.files||[]}); };
+  for(const b of S.books){
+    if(b.type==='course') for(const it of b.items||[]) for(const p of it.payments||[]){ const cur=it.currency||'LKR';
+      add(b,{id:p.id,date:p.date,amount:p.amount,cur,lkr:(+p.amount||0)*(cur==='LKR'?1:(+p.rate||rate(cur))),item:it.title,lineKey:b.id+':i:'+it.id,cat:it.category,
+        type:'Payment',flow:'out',method:p.method,ref:p.ref,note:p.note,files:p.files}); }
+    else if(b.type==='saving') for(const x of b.txns||[])
+      add(b,{...x,item:txnLabel(b,x.type),lineKey:b.id+':t:'+x.type,cat:isChit(b)?'Seettu / chit fund':'Savings',type:txnLabel(b,x.type),flow:x.type==='deposit'?'out':'in'});
+    else if(b.type==='debt') for(const x of b.txns||[])
+      add(b,{...x,item:TXN_LABEL[x.type],lineKey:b.id+':t:'+x.type,cat:'Card / loan',type:x.type==='payment'?'Card payment':TXN_LABEL[x.type],flow:x.type==='payment'?'out':'charge'});
+    else if(b.type==='expense') for(const x of b.txns||[]){ const l=(b.lines||[]).find(l=>l.id===x.lineId);
+      add(b,{...x,item:l?l.name:'Unplanned / other',lineKey:b.id+':l:'+(l?l.id:''),cat:l?.category||'Other',type:'Expense',flow:'out'}); }
+  }
+  return out;
+}
+function repBooks(ignoreBook){
+  return S.books.filter(b=>(REP.country==='ALL'||countryOf(b)===REP.country) && (!REP.secs.length||REP.secs.includes(secOf(b).id)) && (ignoreBook||!REP.book||b.id===REP.book));
+}
+function repMatchQ(text){ const q=REP.q.trim().toLowerCase(); return !q || text.toLowerCase().includes(q); }
+function repRows(ledger){
+  const [from,to]=repRange(), ids=new Set(repBooks().map(b=>b.id)), min=REP.min===''?null:+REP.min, max=REP.max===''?null:+REP.max;
+  return (ledger||repLedger()).filter(r=>ids.has(r.bookId) && r.date>=from && r.date<=to && (!REP.line||r.lineKey===REP.line) && (!REP.cat||r.cat===REP.cat)
+    && (!REP.flow||r.flow===REP.flow) && (!REP.method||(r.method||'—')===REP.method) && (min===null||r.amount>=min) && (max===null||r.amount<=max)
+    && repMatchQ([r.book,r.sec,r.item,r.cat,r.type,r.method,r.ref,r.note,r.amount].join(' ')));
+}
+/* drop filter values that no longer exist (deleted section, item from another country…) */
+function repFix(ledger){
+  REP.secs=REP.secs.filter(id=>S.sections.some(s=>s.id===id));
+  if(REP.book && !repBooks(true).some(b=>b.id===REP.book)) REP.book='';
+  const ids=new Set(repBooks().map(b=>b.id)), inScope=ledger.filter(r=>ids.has(r.bookId));
+  if(REP.line && !inScope.some(r=>r.lineKey===REP.line)) REP.line='';
+  if(REP.cat && !inScope.some(r=>r.cat===REP.cat)) REP.cat='';
+  if(REP.method && !inScope.some(r=>(r.method||'—')===REP.method)) REP.method='';
+  if(!REP_TABS.some(([id])=>id===REP.tab)) REP.tab='txns';
+  return inScope;
+}
+function repAgg(rs){ const o=rs.filter(r=>r.flow==='out');
+  return {n:rs.length,nOut:o.length,out:sum(o,r=>r.lkr),in:sum(rs.filter(r=>r.flow==='in'),r=>r.lkr),ch:sum(rs.filter(r=>r.flow==='charge'),r=>r.lkr)}; }
+function repGroup(rows,dim){ const f=REP_DIMS[dim][1], m=new Map();
+  for(const r of rows){ const k=f(r); let g=m.get(k); if(!g) m.set(k,g={key:k,rows:[]}); g.rows.push(r); }
+  const gs=[...m.values()].map(g=>({...g,a:repAgg(g.rows)}));
+  return dim==='month'||dim==='year' ? gs.sort((a,b)=>a.key.localeCompare(b.key)) : gs.sort((a,b)=>b.a.out-a.a.out||b.a.in-a.a.in||String(a.key).localeCompare(String(b.key)));
+}
+const repDimLabel = (dim,k) => dim==='month' ? ymLabel(k) : k;
+/* months covered by the period — open-ended periods use the months that have data, never far into the future */
+function repMonths(rows){
+  const [from,to]=repRange(), yms=rows.map(r=>r.ym).sort(), now=ymNow();
+  let a=from.slice(0,7), b=to.slice(0,7);
+  if(a<'1900') a=yms[0]||now;
+  const lastData=yms[yms.length-1]||now; b=[b, lastData>now?lastData:now].sort()[0];
+  if(b<a) b=a; const all=ymRange(a,b); return all.slice(-120);
+}
+
+/* ---------- report models: {title, cols:[{h,t,w}], rows:[{c:[…]}], foot:[…]} — the same model feeds the screen, PDF, Excel and CSV ---------- */
+function repTxnModel(rows){
+  const d=REP.dir==='asc'?1:-1, keyOf={date:r=>r.date,sec:r=>r.sec,book:r=>r.book,item:r=>r.item,cat:r=>r.cat,type:r=>r.type,method:r=>r.method,amount:r=>r.lkr,files:r=>r.files.length}[REP.sort]||(r=>r.date);
+  const sorted=[...rows].sort((a,b)=>{ const x=keyOf(a),y=keyOf(b); return (typeof x==='number'?x-y:String(x).localeCompare(String(y)))*d || b.date.localeCompare(a.date); });
+  const cols=[{h:'Date',t:'d',k:'date',w:1.05},{h:'Section',t:'s',k:'sec',w:1.25},{h:'Item',t:'s',k:'book',w:1.45},{h:'Details',t:'s',k:'item',w:1.7},
+    {h:'Category',t:'s',k:'cat',w:1.15},{h:'Type',t:'s',k:'type',w:1.05},{h:'Method',t:'s',k:'method',w:1.25},{h:'Reference',t:'s',w:1.1},{h:'Note',t:'s',w:1.5},
+    {h:'Currency',t:'s',w:.6,pdf:false},{h:'Amount',t:'a',k:'amount',w:1.15},{h:'In '+(repCur()==='LKR'?'Rs':'QAR'),t:'m',w:1.15},{h:'Files',t:'n',k:'files',w:.45}];
+  const out=sorted.map(r=>({cur:r.cur,c:[r.date,r.sec,r.book,r.item,r.cat,r.type,r.method,r.ref,r.note,r.cur,r.amount,repConv(r.lkr),r.files.length||null],
+    h:{1:`${r.secIcon} ${esc(r.sec)}`,2:`<a class="rep-link" data-act="open-book" data-b="${r.bookId}">${esc(r.book)}</a>`,
+       10:`<span class="${r.flow==='in'?'pos':r.flow==='charge'?'muted':''}">${r.flow==='in'?'+':''}${fmt(r.amount,r.cur)}</span>`,
+       12:r.files.length?r.files.map(fileChip).join(''):''}}));
+  const foot=['out','in','charge'].filter(f=>rows.some(r=>r.flow===f)).map(f=>{ const rs=rows.filter(r=>r.flow===f);
+    return {c:[null,`${FLOW_LABEL[f]} · ${rs.length} record(s)`,'','','','','','','','',null,repConv(sum(rs,r=>r.lkr)),sum(rs,r=>r.files.length)]}; });
+  return {title:'Transactions',cols,rows:out,foot,sortable:true};
+}
+function repSummaryModel(rows,group=REP.group,group2=REP.group2){
+  if(group2===group) group2='';
+  const hasCh=rows.some(r=>r.flow==='charge'), T=repAgg(rows), cv=repConv;
+  const cols=[{h:REP_DIMS[group][0]+(group2?' › '+REP_DIMS[group2][0]:''),t:'s',w:3,ind:true},{h:'Records',t:'n',w:.8},{h:'Money out',t:'m',w:1.4},{h:'Money in',t:'m',w:1.4},
+    ...(hasCh?[{h:'Card charges & fees',t:'m',w:1.4}]:[]),{h:'Net (in − out)',t:'m',w:1.4},{h:'Share of money out',t:'p',w:1.1},{h:'Average payment',t:'m',w:1.3}];
+  const si=cols.length-2, ni=cols.length-3;
+  const mk=(label,a,extra={})=>{ const share=T.out?a.out/T.out:null;
+    return {...extra,c:[label,a.n,a.out?cv(a.out):null,a.in?cv(a.in):null,...(hasCh?[a.ch?cv(a.ch):null]:[]),cv(a.in-a.out),share,a.nOut?cv(a.out/a.nOut):null],
+      h:{[si]:share==null?'':`${pctBar(share*100)}<div class="sub">${Math.round(share*100)}%</div>`},cls:{[ni]:a.in-a.out<0?'neg':'pos'}}; };
+  const out=[];
+  for(const g of repGroup(rows,group)){
+    out.push(mk(repDimLabel(group,g.key),g.a,{b:!!group2}));
+    if(group2) for(const s of repGroup(g.rows,group2)) out.push(mk(repDimLabel(group2,s.key),s.a,{ind:true}));
+  }
+  return {title:`Summary by ${REP_DIMS[group][0].toLowerCase()}${group2?' and '+REP_DIMS[group2][0].toLowerCase():''}`,cols,rows:out,foot:[mk('Total',T)]};
+}
+function repMonthlyModel(rows){
+  const months=repMonths(rows), dim=REP.pivot, f=REP_DIMS[dim][1], ms=REP.measure;
+  const val=r=>ms==='out'?(r.flow==='out'?r.lkr:0):ms==='in'?(r.flow==='in'?r.lkr:0):ms==='charge'?(r.flow==='charge'?r.lkr:0):(r.flow==='in'?r.lkr:r.flow==='out'?-r.lkr:0);
+  const tot=new Map(); for(const r of rows){ const v=val(r); if(v) tot.set(f(r),(tot.get(f(r))||0)+v); }
+  const ranked=[...tot.entries()].sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([k])=>k);
+  const keys=ranked.length>8?[...ranked.slice(0,7),'Others']:ranked, top=new Set(keys);
+  const colOf=r=>{ const k=f(r); return top.has(k)?k:'Others'; };
+  const grid=new Map(months.map(m=>[m,new Map()]));
+  for(const r of rows){ const g=grid.get(r.ym); if(!g) continue; const v=val(r); if(!v) continue; const k=colOf(r); g.set(k,(g.get(k)||0)+v); }
+  const cols=[{h:'Month',t:'s',w:1.3},...keys.map(k=>({h:String(repDimLabel(dim,k)),t:'m',w:1.2})),{h:'Total',t:'m',w:1.3}];
+  const out=months.map(m=>{ const g=grid.get(m), vals=keys.map(k=>g.get(k)||0), t=sum(vals,x=>x);
+    return {ym:m,c:[ymLabel(m),...vals.map(v=>v?repConv(v):null),repConv(t)],cls:ms==='net'?{[keys.length+1]:t<0?'neg':'pos'}:{}}; });
+  const colTot=keys.map(k=>sum([...grid.values()],g=>g.get(k)||0)), all=sum(colTot,x=>x), n=Math.max(1,months.length);
+  const foot=[{c:['Total',...colTot.map(repConv),repConv(all)]},{c:['Average per month',...colTot.map(v=>repConv(v/n)),repConv(all/n)]}];
+  const mLabel={out:'money out',in:'money in',charge:'card charges & fees',net:'net (in − out)'}[ms];
+  return {title:`Month by month — ${mLabel} by ${REP_DIMS[dim][0].toLowerCase()}`,cols,rows:out,foot,keys,grid,months};
+}
+/* bills, instalments, saving months and card statements that fall due in the period */
+function repDuesModel(){
+  const [from,to]=repRange(), t=today(), now=ymNow(), cap=ymAdd(now,1), books=repBooks(), out=[];
+  const push=(b,o)=>{ const s=secOf(b); out.push({...o,b,sec:s.name,secIcon:s.icon,book:b.name,lkrDue:o.due*rate(o.cur),lkrPaid:o.paid*rate(o.cur),lkrLeft:o.left*rate(o.cur)}); };
+  for(const b of books){
+    if(b.type==='expense'){ const cache=new Map(), kOf=m=>cache.get(m)||(cache.set(m,expCalc(b,m)),cache.get(m)), cur=b.currency||'LKR';
+      for(const l of (b.lines||[]).filter(l=>l.isBill)){
+        const first=(b.txns||[]).filter(x=>x.lineId===l.id).map(x=>x.date.slice(0,7)).sort()[0];
+        let a=[from.slice(0,7),l.startMonth||first||now].sort().pop(); let z=[to.slice(0,7),l.endMonth||'9999-12',cap].sort()[0];
+        for(const m of ymRange(a,z).slice(-120)){ const r=kOf(m).rows.find(x=>x.l.id===l.id); if(!r||r.due<from||r.due>to) continue;
+          // a "carried" remainder is already part of the next bill, so it is not counted twice
+          push(b,{date:r.due,item:l.name,period:ymLabel(m)+(r.status==='carried'?` · ${fmt(Math.max(0,r.remaining),cur)} carried`:''),cur,due:r.budget+(r.carryIn||0),paid:r.spent,left:r.status==='carried'?0:Math.max(0,r.remaining),status:r.status,kind:'bill'}); } } }
+    else if(b.type==='course') for(const it of b.items||[]){ if(!it.dueDate||it.dueDate<from||it.dueDate>to) continue; const k=calc(it);
+      push(b,{date:it.dueDate,item:it.title,period:it.category||'',cur:it.currency||'LKR',due:it.waived?k.paid:+it.amount,paid:k.paid,left:k.remaining,status:k.status,kind:'course'}); }
+    else if(b.type==='saving'){ const k=savCalc(b);
+      for(const mo of k.months){ if(mo.due<from||mo.due>to) continue;
+        push(b,{date:mo.due,item:k.chit?`Contribution ${mo.no}/${k.members}`:'Monthly saving',period:ymLabel(mo.ym),cur:k.cur,due:mo.planned,paid:mo.deposited,left:mo.short,status:mo.status,kind:'saving'}); } }
+    else if(b.type==='debt'){ const k=debtCalc(b), mP=+(b.minPct??3);
+      k.st.forEach((s,i)=>{ const due=s.dueDate||monthDay(ymAdd(s.date.slice(0,7),1),+b.dueDay||4); if(due<from||due>to) return;
+        const nextSt=k.st[i+1]?.date||'9999-12-31', paid=sum(k.tx.filter(x=>x.type==='payment'&&x.date>s.date&&x.date<=nextSt),x=>+x.amount);
+        const min=(s.minDue!=null&&s.minDue!=='')?+s.minDue:Math.round(s.closing*mP)/100, bal=+s.closing||0, latest=i===k.st.length-1;
+        // the card balance rolls on, so each statement asks for its minimum — the latest one for your planned payment, like the card page
+        const need=Math.min(bal,latest?planPay(b.planMode||'fixed+min',b.planAmount,bal,min):min);
+        const status=paid>=need-0.005||bal<=0.005?'paid':due<t?'overdue':paid>0?'partial':dateStatus(false,false,due);
+        push(b,{date:due,item:`Statement ${fmtDate(s.date)}`,period:`Balance ${fmt(bal,k.cur)}${latest?' · planned payment':' · minimum'}`,cur:k.cur,due:need,paid,left:Math.max(0,need-paid),status,kind:'debt'}); }); }
+  }
+  const lab=x=>(LABELS[x.kind==='bill'?'bill':x.kind==='saving'?'saving':x.kind==='debt'?'debt':'course'][x.status])||x.status;
+  const keep=x=>REP.status==='open'?!['paid','waived','carried'].includes(x.status):REP.status==='overdue'?x.status==='overdue':REP.status==='paid'?['paid','waived'].includes(x.status):true;
+  const list=out.filter(keep).filter(x=>repMatchQ([x.sec,x.book,x.item,x.period,lab(x)].join(' '))).sort((a,b)=>a.date.localeCompare(b.date)||a.book.localeCompare(b.book));
+  const cols=[{h:'Due date',t:'d',w:1.05},{h:'Section',t:'s',w:1.25},{h:'Item',t:'s',w:1.5},{h:'Bill / payment',t:'s',w:1.7},{h:'Period',t:'s',w:1.1},
+    {h:'Currency',t:'s',w:.6,pdf:false},{h:'Amount due',t:'a',w:1.15},{h:'Paid',t:'a',w:1.15},{h:'Remaining',t:'a',w:1.15},{h:'Remaining in '+(repCur()==='LKR'?'Rs':'QAR'),t:'m',w:1.2},{h:'Status',t:'s',w:1.1}];
+  const rows=list.map(x=>({cur:x.cur,c:[x.date,x.sec,x.book,x.item,x.period,x.cur,x.due,x.paid,x.left,repConv(x.lkrLeft),lab(x)],
+    h:{1:`${x.secIcon} ${esc(x.sec)}`,10:`<span class="badge b-${x.status}">${esc(lab(x))}</span>`},cls:{8:x.left>0.005?'neg':''}}));
+  const k={n:list.length,due:sum(list,x=>x.lkrDue),paid:sum(list,x=>x.lkrPaid),left:sum(list,x=>x.lkrLeft),od:list.filter(x=>x.status==='overdue')};
+  k.odAmt=sum(k.od,x=>x.lkrLeft);
+  return {title:'Bills & dues',cols,rows,foot:[{c:[null,`${list.length} item(s)`,'','','','',null,null,null,repConv(k.left),'']}],k};
+}
+/* where every plan stands now: paid, still to pay, saved, owed */
+function repBalancesModel(ledger){
+  const [from,to]=repRange(), now=ymNow(), out=[];
+  for(const b of repBooks()){ const s=secOf(b), base={b,sec:s.name,secIcon:s.icon,book:b.name};
+    if(b.type==='course'){ const k=courseCalc(b);
+      out.push({...base,kind:'Payment schedule',cur:'LKR',plan:k.totalLKR,paid:k.paidLKR,left:k.balLKR,pct:k.pct/100,pos:-k.balLKR,note:`${k.doneN}/${k.n} items done${k.overdueN?` · ${k.overdueN} overdue`:''}`}); }
+    else if(b.type==='saving'){ const k=savCalc(b);
+      if(k.chit) out.push({...base,kind:'Seettu / chit fund',cur:k.cur,plan:k.total,paid:k.dep,left:k.remainingToPay,pct:k.pct/100,pos:k.position*k.r,
+        note:`Payout ${fmt(k.payoutAmt,k.cur)} — ${LABELS.payout[k.payoutStatus]}${k.payoutYm?' ('+ymLabel(k.payoutYm)+')':''}`});
+      else out.push({...base,kind:'Saving plan',cur:k.cur,plan:k.target,paid:k.balance,left:k.remaining,pct:k.target?k.pct/100:null,pos:k.balanceLKR,
+        note:`Deposits ${fmt(k.dep,k.cur)}${k.wd?` · withdrawn ${fmt(k.wd,k.cur)}`:''}${k.intr?` · interest ${fmt(k.intr,k.cur)}`:''}`}); }
+    else if(b.type==='debt'){ const k=debtCalc(b);
+      out.push({...base,kind:'Credit card / loan',cur:k.cur,plan:k.limit||null,paid:k.totalPaid,left:k.balance,pct:k.peak?k.pct/100:null,pos:-k.balanceLKR,
+        note:`${k.due?`Next due ${fmtDate(k.due)} · ${LABELS.debt[k.status]}`:'No statement yet'}${k.limit?` · ${k.util}% of limit used`:''}`}); }
+    else if(b.type==='expense'){ const tx=(b.txns||[]).map(x=>x.date.slice(0,7)), starts=(b.lines||[]).map(l=>l.startMonth).filter(Boolean);
+      let a=from.slice(0,7); if(a<'1900') a=[...tx,...starts].sort()[0]||now; let z=[to.slice(0,7),now].sort()[0]; if(z<a) z=a;
+      const ks=ymRange(a,z).slice(-120).map(m=>expCalc(b,m)), plan=sum(ks,k=>k.budget), spent=sum(ks,k=>k.spent), od=sum(ks,k=>k.billsOverdue.length);
+      out.push({...base,kind:'Monthly budget',cur:b.currency||'LKR',plan,paid:spent,left:plan-spent,pct:plan?spent/plan:null,pos:null,
+        note:`${ks.length} month(s) · budget vs spent${od?` · ${od} overdue bill(s)`:''}`}); }
+  }
+  const list=out.filter(x=>repMatchQ([x.sec,x.book,x.kind,x.note].join(' ')));
+  const cols=[{h:'Section',t:'s',w:1.3},{h:'Item',t:'s',w:1.6},{h:'Type',t:'s',w:1.2},{h:'Currency',t:'s',w:.6},{h:'Plan / target / limit',t:'a',w:1.25},
+    {h:'Paid / saved / spent',t:'a',w:1.25},{h:'Still to pay / to save / owed',t:'a',w:1.35},{h:'Progress',t:'p',w:.75},{h:'Asset (+) / owed (−) in '+(repCur()==='LKR'?'Rs':'QAR'),t:'m',w:1.35},{h:'Notes',t:'s',w:2.4}];
+  const rows=list.map(x=>({cur:x.cur,c:[x.sec,x.book,x.kind,x.cur,x.plan,x.paid,x.left,x.pct,x.pos==null?null:repConv(x.pos),x.note],
+    h:{0:`${x.secIcon} ${esc(x.sec)}`,1:`<a class="rep-link" data-act="open-book" data-b="${x.b.id}">${esc(x.book)}</a>`,7:x.pct==null?'':`${pctBar(x.pct*100)}<div class="sub">${Math.round(x.pct*100)}%</div>`},
+    cls:{8:x.pos==null?'':x.pos<0?'neg':'pos'}}));
+  const k={assets:sum(list.filter(x=>x.pos>0),x=>x.pos),owed:-sum(list.filter(x=>x.pos<0),x=>x.pos),exp:list.filter(x=>x.kind==='Monthly budget')};
+  k.net=k.assets-k.owed; k.expPlan=sum(k.exp,x=>x.plan*rate(x.cur)); k.expSpent=sum(k.exp,x=>x.paid*rate(x.cur));
+  return {title:'Balances',cols,rows,foot:[{c:['Net position',`${list.length} item(s)`,'','',null,null,null,null,repConv(k.net),'']}],k};
+}
+function repModel(tab,rows,ledger){
+  return tab==='summary'?repSummaryModel(rows):tab==='monthly'?repMonthlyModel(rows):tab==='dues'?repDuesModel():tab==='balances'?repBalancesModel(ledger):repTxnModel(rows);
+}
+/* headline figures for the open report: [label, value, css, small text] */
+function repKpis(tab,rows,model){
+  const C=x=>repFmt(x);
+  if(tab==='dues'){ const k=model.k; return [['Items',String(k.n),'',REP.status==='open'?'not fully paid':REP.status==='overdue'?'overdue':REP.status==='paid'?'paid':'all statuses'],
+    ['Amount due',C(k.due),'','for these items'],['Paid',C(k.paid),'ok',''],['Still to pay',C(k.left),k.left>0.005?'bad':'ok',''],['Overdue',`${k.od.length}`,k.od.length?'bad':'ok',k.od.length?C(k.odAmt)+' overdue':'Nothing overdue']]; }
+  if(tab==='balances'){ const k=model.k; return [['Assets',C(k.assets),'ok','savings & money held'],['Owed',C(k.owed),k.owed?'bad':'ok','balances still to pay'],
+    ['Net position',C(k.net),k.net<0?'bad':'ok','assets − owed'],['Budgets',k.expPlan?Math.round(k.expSpent/k.expPlan*100)+'% used':'—','',k.expPlan?`${C(k.expSpent)} of ${C(k.expPlan)}`:'no monthly budgets']]; }
+  const a=repAgg(rows), months=new Set(rows.map(r=>r.ym)).size||1, big=rows.filter(r=>r.flow==='out').sort((x,y)=>y.lkr-x.lkr)[0], rc=rows.filter(r=>r.files.length).length;
+  return [['Money out',C(a.out),'',`${a.nOut} payment(s)`],['Money in',C(a.in),'ok','withdrawals, payouts, interest'],
+    ...(a.ch?[['Card charges & fees',C(a.ch),'bad','spending & fees on cards']]:[]),
+    ['Average per month',C(a.out/months),'',`over ${months} month(s) with records`],
+    ['Largest payment',big?C(big.lkr):'—','',big?`${big.book} · ${big.item} · ${fmtDate(big.date)}`:''],['Records',String(rows.length),'',`${rc} with receipts attached`]];
+}
+function repFilterLines(){
+  const L=[`Period: ${repRangeText()}${REP.preset!=='custom'&&REP.preset!=='all'?' ('+REP_PRESETS[REP.preset]+')':''}`];
+  const parts=[];
+  parts.push('Country: '+(REP.country==='ALL'?'All':COUNTRIES[REP.country]?.name||REP.country));
+  parts.push('Sections: '+(REP.secs.length?REP.secs.map(id=>sec(id)?.name).filter(Boolean).join(', '):'All'));
+  if(REP.book) parts.push('Item: '+(book(REP.book)?.name||''));
+  L.push(parts.join('   ·   '));
+  const more=[];
+  if(REP.tab!=='dues'&&REP.tab!=='balances'){
+    if(REP.line){ const r=repLedger().find(x=>x.lineKey===REP.line); if(r) more.push('Detail: '+r.item); }
+    if(REP.cat) more.push('Category: '+REP.cat); if(REP.flow) more.push('Flow: '+FLOW_LABEL[REP.flow]); if(REP.method) more.push('Method: '+REP.method);
+    if(REP.min!==''||REP.max!=='') more.push(`Amount: ${REP.min!==''?REP.min:'0'} – ${REP.max!==''?REP.max:'any'}`); }
+  if(REP.tab==='dues') more.push('Status: '+{open:'Not fully paid',overdue:'Overdue only',paid:'Paid',all:'All'}[REP.status||'all']);
+  if(REP.q.trim()) more.push(`Search: "${REP.q.trim()}"`);
+  more.push('Totals in '+(repCur()==='LKR'?'Sri Lankan Rupees (Rs)':'Qatari Riyal (QAR)')+(Object.keys(S.settings.rates||{}).length?' at the exchange rates in Settings':''));
+  L.push(more.join('   ·   '));
+  return L;
+}
+function cellText(c,v,row){
+  if(v==null||v==='') return '';
+  switch(c.t){ case 'd': return fmtDate(v); case 'm': return fmt(Math.round(v*100)/100,repCur()); case 'a': return fmt(Math.round(v*100)/100,row?.cur||'LKR');
+    case 'n': return Number(v).toLocaleString('en-US'); case 'p': return Math.round(v*100)+'%'; default: return String(v); }
+}
+
+/* ---------- screen ---------- */
+function repTableHTML(model){
+  const cols=model.cols, lim=REP.printAll?Infinity:REP.limit, rows=model.rows.slice(0,lim);
+  const th=c=>{ const s=model.sortable&&c.k; return `<th class="${isNumCol(c)?'num':''}${s?' sortable':''}" ${s?`data-act="rep-sort" data-k="${c.k}" title="Sort"`:''}>${esc(c.h)}${s&&REP.sort===c.k?(REP.dir==='asc'?' ▲':' ▼'):''}</th>`; };
+  const td=(c,i,row,foot)=>{ const h=row.h?.[i]; const txt=h!=null&&!foot?h:esc(cellText(c,row.c[i],row));
+    return `<td class="${isNumCol(c)?'num':''}${c.t==='d'?' nowrap':''}${row.cls?.[i]?' '+row.cls[i]:''}">${c.ind&&row.ind?'<span class="rep-ind"></span>':''}${foot||row.b?'<b>'+txt+'</b>':txt}</td>`; };
+  return `<div class="tbl-wrap"><table class="rep-table"><thead><tr>${cols.map(th).join('')}</tr></thead><tbody>
+    ${rows.map(r=>`<tr class="${r.b?'rep-grp':''}">${cols.map((c,i)=>td(c,i,r)).join('')}</tr>`).join('')||`<tr><td colspan="${cols.length}" class="empty">No records match these filters.</td></tr>`}
+    </tbody>${model.rows.length&&model.foot?.length?`<tfoot>${model.foot.map(r=>`<tr>${cols.map((c,i)=>td(c,i,r,true)).join('')}</tr>`).join('')}</tfoot>`:''}</table></div>
+    ${model.rows.length>rows.length?`<div class="rep-more no-print">Showing ${rows.length} of ${model.rows.length} rows · <button class="btn sm" data-act="rep-more">Show all</button> <span class="sub">PDF, Excel, CSV and Print always include every row.</span></div>`:''}`;
+}
+const repShort = lkr => { const v=repConv(lkr); return (repCur()==='LKR'?'Rs ':'QAR ')+(v>=1e6?(v/1e6).toFixed(1)+'M':v>=1e3?Math.round(v/1e3)+'k':Math.round(v)); };
+function repSet(el){ const k=el.dataset.rep, v=el.value;
+  if((k==='from'||k==='to'||(k==='preset'&&v==='custom')) && REP.preset!=='custom'){ const [a,b]=repRange(); REP.from=a>'1900'?a:''; REP.to=b<'9000'?b:''; if(k!=='preset') REP.preset='custom'; }
+  REP[k]=v; REP.limit=300; saveRep(); render(); }
+function repMonthlyChart(model){
+  if(REP.measure==='net'||!model.months.length) return '';
+  const keys=model.keys, ms=model.months, vals=ms.map(m=>keys.map(k=>Math.max(0,model.grid.get(m).get(k)||0)));
+  const max=Math.max(1,...vals.map(v=>sum(v,x=>x))), W=Math.max(1000,ms.length*36),H=230,pl=56,pb=26,pt=8,cw=(W-pl-8)/ms.length,bw=Math.min(22,cw*.62), y=v=>pt+(H-pt-pb)*(1-v/max);
+  let svg=`<div class="legend">${keys.map((k,i)=>`<span><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(repDimLabel(REP.pivot,k))}</span>`).join('')}</div><div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="min-width:${Math.min(W,900)}px" role="img" aria-label="Month by month chart">`;
+  [0,.5,1].forEach(f=>{ svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(f*max)}" y2="${y(f*max)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(f*max)+4}" text-anchor="end" font-size="10.5" fill="var(--muted)">${repShort(f*max)}</text>`; });
+  ms.forEach((m,i)=>{ const x=pl+i*cw+cw/2-bw/2; let acc=0;
+    vals[i].forEach((v,j)=>{ if(!v) return; svg+=`<rect x="${x}" y="${y(acc+v)}" width="${bw}" height="${y(acc)-y(acc+v)}" fill="${COLORS[j%COLORS.length]}"><title>${ymLabel(m)} · ${esc(repDimLabel(REP.pivot,keys[j]))}: ${repFmt(v)}</title></rect>`; acc+=v; });
+    if(ms.length<=24||i%2===0) svg+=`<text x="${pl+i*cw+cw/2}" y="${H-8}" text-anchor="middle" font-size="10" fill="var(--muted)">${ymShort(m)}</text>`; });
+  return `<div class="card chart" style="margin-bottom:14px">${svg}</svg></div></div>`;
+}
+function renderReports(){
+  const ledger=repLedger(), scope=repFix(ledger), rows=repRows(ledger), model=repModel(REP.tab,rows,ledger), kpis=repKpis(REP.tab,rows,model);
+  const sel=(key,options,label,extra='')=>`<label>${label}<select data-rep="${key}" ${extra}>${options.map(([v,l])=>`<option value="${esc(v)}" ${String(REP[key])===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select></label>`;
+  const countries=[...new Set(S.books.map(countryOf))];
+  const books=repBooks(true), uniq=(arr)=>[...new Map(arr).entries()];
+  const lines=uniq(scope.map(r=>[r.lineKey,`${r.book} › ${r.item}`])).sort((a,b)=>a[1].localeCompare(b[1]));
+  const cats=[...new Set(scope.map(r=>r.cat).filter(Boolean))].sort(), methods=[...new Set(scope.map(r=>r.method||'—'))].sort();
+  const ledgerTab=REP.tab!=='dues'&&REP.tab!=='balances', [from,to]=repRange();
+  const dimOpts=Object.entries(REP_DIMS).map(([k,[l]])=>[k,l]);
+  const tabCtl = REP.tab==='summary' ? sel('group',dimOpts,'Group by')+sel('group2',[['','— nothing —'],...dimOpts.filter(([k])=>k!==REP.group)],'Then by')
+    : REP.tab==='monthly' ? sel('pivot',dimOpts.filter(([k])=>!['month','year','item'].includes(k)),'Columns')+sel('measure',[['out','Money out'],['in','Money in'],['net','Net (in − out)'],['charge','Card charges & fees']],'Show')
+    : REP.tab==='dues' ? sel('status',[['open','Not fully paid'],['overdue','Overdue only'],['paid','Paid'],['all','All']],'Status') : '';
+  const body = REP.tab==='monthly' ? repMonthlyChart(model)+repTableHTML(model) : repTableHTML(model);
+  return `<div class="rep-page"><div class="top"><div><h1>📑 Reports</h1><div class="sub">Filter any section, item or period — then print it, download a PDF or export to Excel.</div></div>
+    <div class="toolbar no-print" style="margin:0"><button class="btn" data-act="rep-print">🖨 Print</button><button class="btn" data-act="rep-pdf">📄 PDF</button><button class="btn primary" data-act="rep-xlsx">📊 Excel</button><button class="btn" data-act="rep-csv">⬇ CSV</button></div></div>
+  <div class="card rep-filters no-print">
+    <div class="rep-grid">
+      ${sel('preset',Object.entries(REP_PRESETS),'Period')}
+      <label>From<input type="date" data-rep="from" value="${REP.preset==='custom'?esc(REP.from):from>'1900'?from:''}"></label>
+      <label>To<input type="date" data-rep="to" value="${REP.preset==='custom'?esc(REP.to):to<'9000'?to:''}"></label>
+      ${sel('country',[['ALL','🌍 All countries'],...countries.map(c=>[c,countryLabel(c)])],'Country')}
+      ${sel('book',[['','All items'],...books.map(b=>[b.id,`${secOf(b).icon} ${b.name}`])],'Item')}
+      ${sel('cur',[['LKR','Rs (Sri Lankan Rupee)'],['QAR','QAR (Qatari Riyal)']],'Show totals in')}
+    </div>
+    <div class="rep-secs"><span class="sub">Sections:</span>
+      <button class="rep-chip ${REP.secs.length?'':'on'}" data-act="rep-sec-all">All</button>
+      ${S.sections.map(s=>`<button class="rep-chip ${REP.secs.includes(s.id)?'on':''}" data-act="rep-sec" data-s="${s.id}">${s.icon} ${esc(s.name)}</button>`).join('')}</div>
+    <div class="rep-grid">
+      ${ledgerTab?sel('line',[['','All details / budget lines'],...lines],'Detail / budget line')+sel('cat',[['','All categories'],...cats.map(c=>[c,c])],'Category')
+        +sel('flow',[['','All money flows'],...Object.entries(FLOW_LABEL)],'Money flow')+sel('method',[['','All methods'],...methods.map(m=>[m,m])],'Payment method')
+        +`<label>Amount from<input type="number" step="any" min="0" data-rep="min" value="${esc(REP.min)}" placeholder="0"></label><label>Amount to<input type="number" step="any" min="0" data-rep="max" value="${esc(REP.max)}" placeholder="any"></label>`:''}
+      <label>Search<input type="search" data-rep="q" data-rep-live value="${esc(REP.q)}" placeholder="Item, note, reference…"></label>
+      ${tabCtl}
+      <label class="rep-reset"><span>&nbsp;</span><button class="btn" data-act="rep-reset">↺ Reset filters</button></label>
+    </div>
+  </div>
+  <div class="print-only rep-print-head"><h2>${esc(REP_TABS.find(([id])=>id===REP.tab)[1].replace(/^\S+\s/,''))} report</h2>${repFilterLines().map(l=>`<div class="sub">${esc(l)}</div>`).join('')}<div class="sub">Printed ${esc(fmtDT(new Date().toISOString()))}</div></div>
+  <div class="grid kpis rep-kpis">${kpis.map(([l,v,c,s])=>`<div class="card kpi ${c}"><div class="l">${esc(l)}</div><div class="v">${esc(v)}</div><div class="s">${esc(s||'')}</div></div>`).join('')}</div>
+  <div class="tabs">${REP_TABS.map(([id,l])=>`<a class="${REP.tab===id?'active':''}" data-act="rep-tab" data-tab="${id}">${l}</a>`).join('')}</div>
+  <div class="rep-head"><h2>${esc(model.title)}</h2><span class="sub">${esc(repRangeText())} · ${model.rows.length} row(s)${ledgerTab?'':' · uses period, country, section, item & search filters'}</span></div>
+  ${body}</div>`;
+}
+
+/* ---------- exports ---------- */
+function repExportName(ext){
+  const [a,b]=repRange(), tab=REP_TABS.find(([id])=>id===REP.tab)[1].replace(/^\S+\s/,'').replace(/[^\w]+/g,'-');
+  const per=a<'1900'&&b>'9000'?'All-time':`${a<'1900'?'start':a}_to_${b>'9000'?today():b}`;
+  return `My-Budget-Report-${tab}-${per}.${ext}`;
+}
+function repExportData(){
+  const ledger=repLedger(); repFix(ledger); const rows=repRows(ledger), model=repModel(REP.tab,rows,ledger);
+  return {ledger,rows,model,kpis:repKpis(REP.tab,rows,model)};
+}
+function repCSV(){
+  const {model}=repExportData(), raw=(c,v)=>v==null?'':c.t==='p'?Math.round(v*100)+'%':c.t==='m'||c.t==='a'?Math.round(v*100)/100:v;
+  downloadCSV(repExportName('csv'),[model.cols.map(c=>c.h),...model.rows.map(r=>model.cols.map((c,i)=>(c.ind&&r.ind?'   ':'')+raw(c,r.c[i]))),...(model.foot||[]).map(r=>model.cols.map((c,i)=>raw(c,r.c[i])))]);
+  toast('⬇ CSV downloaded');
+}
+function repPDF(){
+  const {model,kpis}=repExportData(), tabName=REP_TABS.find(([id])=>id===REP.tab)[1].replace(/^\S+\s/,'');
+  const blob=pdfReport({title:`${tabName} report`,subtitle:model.title+' · '+repRangeText(),meta:repFilterLines(),kpis:kpis.map(([l,v])=>[l,v]),model});
+  download(repExportName('pdf'),blob); toast('📄 PDF downloaded');
+}
+function repXLSX(){
+  const {rows,model,kpis,ledger}=repExportData(), tabName=REP_TABS.find(([id])=>id===REP.tab)[1].replace(/^\S+\s/,'');
+  const meta=[...repFilterLines(),kpis.map(([l,v])=>`${l}: ${v}`).join('   ·   '),'Generated '+fmtDT(new Date().toISOString())];
+  const sheets=[{name:tabName,title:`My Financial Budget — ${model.title}`,meta,model}];
+  if(REP.tab!=='summary') sheets.push({name:'Summary',title:'Summary by section and item',meta:meta.slice(0,3),model:repSummaryModel(rows,'section','book')});
+  if(REP.tab!=='txns') sheets.push({name:'Transactions',title:'Transactions',meta:meta.slice(0,3),model:repTxnModel(rows)});
+  if(REP.tab!=='monthly'){ const keep=[REP.pivot,REP.measure]; REP.pivot='section'; REP.measure='out'; sheets.push({name:'Month by month',title:'Money out by month and section',meta:meta.slice(0,3),model:repMonthlyModel(rows)}); [REP.pivot,REP.measure]=keep; }
+  download(repExportName('xlsx'),xlsxBlob(sheets)); toast('📊 Excel file downloaded');
+}
+
+/* ---------- PDF writer (no library: standard Helvetica, WinAnsi text) ---------- */
+const PDF_WR=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const PDF_WB=[278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584];
+const PDF_MAP={'€':128,'‚':130,'„':132,'…':133,'‹':139,'‘':145,'’':146,'“':147,'”':148,'•':149,'–':150,'—':151,'™':153,'›':155};
+const PDF_SUB={'≈':'~','→':'->','←':'<-','₹':'Rs ','₨':'Rs','✓':'v','✔':'v','−':'-','≤':'<=','≥':'>='};
+const PDF_XW={128:556,133:1000,139:333,145:222,146:222,147:333,148:333,149:350,150:556,151:1000,155:333,160:278,183:278};
+function pdfBytes(s){ const out=[];
+  for(const ch of String(s??'')){ if(PDF_SUB[ch]){ for(const c of PDF_SUB[ch]) out.push(c.charCodeAt(0)); continue; }
+    const c=ch.codePointAt(0); if(c>=32&&c<127) out.push(c); else if(PDF_MAP[ch]) out.push(PDF_MAP[ch]); else if(c>=160&&c<=255) out.push(c); else if(c===9||c===10) out.push(32); }
+  while(out[0]===32) out.shift(); return out; }
+const pdfWidth = (by,bold,size) => sum(by,c=>c>=32&&c<127?(bold?PDF_WB:PDF_WR)[c-32]:(PDF_XW[c]||556))*size/1000;
+function pdfFit(by,maxW,bold,size){ if(pdfWidth(by,bold,size)<=maxW) return by; const dots=[46,46,46]; let a=by.slice();
+  while(a.length && pdfWidth([...a,...dots],bold,size)>maxW) a.pop(); return [...a,...dots]; }
+const pdfEsc = by => by.map(c=>c===40||c===41||c===92?'\\'+String.fromCharCode(c):c<32||c>126?'\\'+c.toString(8).padStart(3,'0'):String.fromCharCode(c)).join('');
+function pdfReport({title,subtitle,meta,kpis,model}){
+  const W=842,H=595,M=30,pages=[]; let ops=null,y=0;
+  const rgb=c=>c.map(v=>(v/255).toFixed(3)).join(' ');
+  const text=(x,yy,s,{size=8,bold=false,color=[30,35,50],align='l',maxW=null}={})=>{ let by=pdfBytes(s); if(!by.length) return; if(maxW) by=pdfFit(by,maxW,bold,size);
+    const w=pdfWidth(by,bold,size), xx=align==='r'?x-w:align==='c'?x-w/2:x; ops.push(`BT /${bold?'F2':'F1'} ${size} Tf ${rgb(color)} rg ${xx.toFixed(2)} ${(H-yy).toFixed(2)} Td (${pdfEsc(by)}) Tj ET`); };
+  const rect=(x,yy,w,h,fill)=>ops.push(`${rgb(fill)} rg ${x.toFixed(2)} ${(H-yy-h).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f`);
+  const line=(x1,y1,x2,y2,c,lw=.5)=>ops.push(`${rgb(c)} RG ${lw} w ${x1.toFixed(2)} ${(H-y1).toFixed(2)} m ${x2.toFixed(2)} ${(H-y2).toFixed(2)} l S`);
+  const newPage=()=>{ ops=[]; pages.push(ops); y=M;
+    text(M,y+13,title,{size:15,bold:true,color:[79,107,237]}); text(W-M,y+11,'My Financial Budget',{size:9,bold:true,color:[110,116,136],align:'r'});
+    y+=20; if(subtitle){ text(M,y+9,subtitle,{size:9,color:[90,96,112],maxW:W-2*M}); y+=14; } line(M,y,W-M,y,[79,107,237],1); y+=8; };
+  newPage();
+  for(const m of meta||[]){ text(M,y+8,m,{size:8,color:[70,76,92],maxW:W-2*M}); y+=11; }
+  if(kpis?.length){ y+=4; const n=kpis.length,gap=8,bw=(W-2*M-gap*(n-1))/n;
+    kpis.forEach(([l,v],i)=>{ const x=M+i*(bw+gap); rect(x,y,bw,36,[240,243,253]); text(x+8,y+12,String(l).toUpperCase(),{size:6.8,color:[100,106,124],maxW:bw-14}); text(x+8,y+28,v,{size:11,bold:true,color:[25,30,45],maxW:bw-14}); });
+    y+=46; }
+  const idx=model.cols.map((c,i)=>c.pdf===false?-1:i).filter(i=>i>=0), cols=idx.map(i=>model.cols[i]), tw=W-2*M, tot=sum(cols,c=>c.w||1), cw=cols.map(c=>(c.w||1)/tot*tw), RH=14.5, HH=18;
+  const head=()=>{ rect(M,y,tw,HH,[79,107,237]); let x=M; cols.forEach((c,i)=>{ const r=isNumCol(c); text(r?x+cw[i]-4:x+4,y+12,c.h,{size:7.2,bold:true,color:[255,255,255],align:r?'r':'l',maxW:cw[i]-8}); x+=cw[i]; }); y+=HH; };
+  const row=(r,k,foot)=>{ if(y+RH>H-M-12){ newPage(); head(); }
+    const fill=foot?[224,230,251]:r.b?[234,238,251]:k%2?[247,248,252]:null; if(fill) rect(M,y,tw,RH,fill);
+    let x=M; idx.forEach((ci,i)=>{ const c=model.cols[ci], num=isNumCol(c), cls=r.cls?.[ci]||'';
+      const color=cls.includes('neg')?[200,45,45]:cls.includes('pos')&&c.t==='m'?[24,128,80]:[30,35,50];
+      text(num?x+cw[i]-4:x+4+(c.ind&&r.ind?12:0),y+10,cellText(c,r.c[ci],r),{size:7.2,bold:foot||!!r.b,color,align:num?'r':'l',maxW:cw[i]-8-(c.ind&&r.ind?12:0)}); x+=cw[i]; });
+    line(M,y+RH,M+tw,y+RH,[226,229,237],.4); y+=RH; };
+  if(model.title){ if(y+40>H-M) newPage(); text(M,y+10,model.title,{size:10.5,bold:true}); y+=16; }
+  head();
+  model.rows.forEach((r,k)=>row(r,k,false));
+  if(!model.rows.length){ text(M+4,y+12,'No records match these filters.',{size:9,color:[120,125,140]}); y+=RH; }
+  else (model.foot||[]).forEach(r=>row(r,0,true));
+  const stamp='Generated '+fmtDT(new Date().toISOString())+' · My Financial Budget';
+  pages.forEach((p,i)=>{ ops=p; line(M,H-22,W-M,H-22,[220,224,232],.5); text(M,H-12,stamp,{size:7,color:[120,125,140]}); text(W-M,H-12,`Page ${i+1} of ${pages.length}`,{size:7,color:[120,125,140],align:'r'}); });
+  const objs=['<< /Type /Catalog /Pages 2 0 R >>','',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>','<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'];
+  const kids=[];
+  for(const p of pages){ const content=p.join('\n'); objs.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${objs.length} 0 R >>`); kids.push(objs.length); }
+  objs[1]=`<< /Type /Pages /Kids [${kids.map(k=>k+' 0 R').join(' ')}] /Count ${kids.length} >>`;
+  const d=new Date(); objs.push(`<< /Title (${pdfEsc(pdfBytes(title))}) /Producer (My Financial Budget) /CreationDate (D:${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}) >>`);
+  let out='%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'; const offs=[];
+  objs.forEach((o,i)=>{ offs.push(out.length); out+=`${i+1} 0 obj\n${o}\nendobj\n`; });
+  const xref=out.length;
+  out+=`xref\n0 ${objs.length+1}\n0000000000 65535 f \n${offs.map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')}trailer\n<< /Size ${objs.length+1} /Root 1 0 R /Info ${objs.length} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  const u8=new Uint8Array(out.length); for(let i=0;i<out.length;i++) u8[i]=out.charCodeAt(i)&255;
+  return new Blob([u8],{type:'application/pdf'});
+}
+
+/* ---------- Excel writer (.xlsx = zip of XML parts, stored uncompressed) ---------- */
+const CRC_T=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=c&1?0xEDB88320^(c>>>1):c>>>1; t[n]=c>>>0; } return t; })();
+const crc32 = u => { let c=0xFFFFFFFF; for(let i=0;i<u.length;i++) c=CRC_T[(c^u[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; };
+function zipStore(files,type){
+  const enc=new TextEncoder(), parts=[], central=[], d=new Date(); let off=0;
+  const tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1), dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  for(const f of files){ const name=enc.encode(f.name), data=typeof f.data==='string'?enc.encode(f.data):f.data, crc=crc32(data);
+    const h=new DataView(new ArrayBuffer(30)); [[0,0x04034b50,4],[4,20,2],[6,0x0800,2],[8,0,2],[10,tm,2],[12,dt,2],[14,crc,4],[18,data.length,4],[22,data.length,4],[26,name.length,2],[28,0,2]]
+      .forEach(([o,v,n])=>n===4?h.setUint32(o,v,true):h.setUint16(o,v,true));
+    const c=new DataView(new ArrayBuffer(46)); [[0,0x02014b50,4],[4,20,2],[6,20,2],[8,0x0800,2],[10,0,2],[12,tm,2],[14,dt,2],[16,crc,4],[20,data.length,4],[24,data.length,4],[28,name.length,2],[30,0,2],[32,0,2],[34,0,2],[36,0,2],[38,0,4],[42,off,4]]
+      .forEach(([o,v,n])=>n===4?c.setUint32(o,v,true):c.setUint16(o,v,true));
+    parts.push(h,name,data); central.push(c,name); off+=30+name.length+data.length; }
+  const size=sum(central,x=>x.byteLength), e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true); e.setUint16(8,files.length,true); e.setUint16(10,files.length,true); e.setUint32(12,size,true); e.setUint32(16,off,true);
+  return new Blob([...parts,...central,e],{type});
+}
+const xmlEsc = s => String(s??'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const xlCol = n => { let s=''; n++; while(n){ const m=(n-1)%26; s=String.fromCharCode(65+m)+s; n=Math.floor((n-1)/26); } return s; };
+const xlDate = iso => { const [y,m,d]=iso.split('-').map(Number); return (Date.UTC(y,m-1,d)-Date.UTC(1899,11,30))/864e5; };
+const XL_T={s:0,m:1,a:1,n:2,d:3,p:4}, XL_NF=[0,4,3,164,9];
+const xlStyle = (c,mode) => 4+XL_T[c.t||'s']*3+mode;          // mode 0 normal · 1 group (bold) · 2 total (bold, shaded)
+function xlSheetXML({title,meta,model}){
+  const cols=model.cols, out=[]; let r=0;
+  const put=cells=>{ r++; out.push(`<row r="${r}">${cells.map(([ci,v,st,num])=>num?`<c r="${xlCol(ci)}${r}" s="${st}"><v>${v}</v></c>`
+    :`<c r="${xlCol(ci)}${r}" s="${st}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`).join('')}</row>`); };
+  const cell=(c,i,v,mode,row)=>{ const st=xlStyle(c,mode);
+    if(v==null||v==='') return [i,'',st];
+    if(c.t==='d'&&/^\d{4}-\d{2}-\d{2}$/.test(v)) return [i,xlDate(v),st,1];
+    if(['m','a','n','p'].includes(c.t)&&typeof v==='number') return [i,Math.round(v*1e4)/1e4,st,1];
+    return [i,(c.ind&&row?.ind?'    ':'')+(typeof v==='number'?cellText(c,v,row):v),xlStyle({t:'s'},mode)]; };
+  put([[0,title,2]]); for(const m of meta||[]) put([[0,m,3]]); put([]);
+  const hr=r+1; put(cols.map((c,i)=>[i,c.h,1]));
+  model.rows.forEach(row=>put(cols.map((c,i)=>cell(c,i,row.c[i],row.b?1:0,row))));
+  const last=r; if(model.rows.length) (model.foot||[]).forEach(row=>put(cols.map((c,i)=>cell(c,i,row.c[i],2,row))));
+  const widths=cols.map(c=>({d:13,m:16,a:16,n:9,p:10}[c.t]||Math.round(Math.min(48,Math.max(11,(c.w||1)*11)))));
+  return {hr,last,ncol:cols.length,xml:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView workbookViewId="0"><pane ySplit="${hr}" topLeftCell="A${hr+1}" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${out.join('')}</sheetData>${model.rows.length?`<autoFilter ref="A${hr}:${xlCol(cols.length-1)}${last}"/>`:''}<pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`};
+}
+function xlsxBlob(sheets){
+  const names=[]; for(const s of sheets){ let n=(s.name.replace(/[\[\]:*?\/\\]/g,' ').trim()||'Sheet').slice(0,31), k=2; while(names.includes(n)) n=n.slice(0,27)+' ('+(k++)+')'; names.push(n); }
+  const built=sheets.map(xlSheetXML);
+  const xfs=[[0,0,0,0],[0,2,2,1],[0,3,0,0],[0,4,0,0]]; for(const nf of XL_NF) for(const mode of [0,1,2]) xfs.push([nf,mode?1:0,mode===2?3:0,1]);
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="d mmm yyyy"/></numFmts><fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font><font><b/><sz val="15"/><color rgb="FF4F6BED"/><name val="Calibri"/></font><font><i/><sz val="10"/><color rgb="FF5F6577"/><name val="Calibri"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF4F6BED"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE4E9FB"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD9DEE8"/></left><right style="thin"><color rgb="FFD9DEE8"/></right><top style="thin"><color rgb="FFD9DEE8"/></top><bottom style="thin"><color rgb="FFD9DEE8"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.map(([nf,fo,fi,bo])=>`<xf numFmtId="${nf}" fontId="${fo}" fillId="${fi}" borderId="${bo}" xfId="0"${nf?' applyNumberFormat="1"':''}${fo?' applyFont="1"':''}${fi?' applyFill="1"':''}${bo?' applyBorder="1"':''}/>`).join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const defs=built.map((b,i)=>b.last>=b.hr+1?`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${xmlEsc(names[i].replace(/'/g,"''"))}'!$A$${b.hr}:$${xlCol(b.ncol-1)}$${b.last}</definedName>`:'').join('');
+  const files=[
+    {name:'[Content_Types].xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${built.map((_,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+    {name:'_rels/.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${names.map((n,i)=>`<sheet name="${xmlEsc(n)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets>${defs?`<definedNames>${defs}</definedNames>`:''}</workbook>`},
+    {name:'xl/_rels/workbook.xml.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${built.map((_,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${built.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml',data:styles},
+    ...built.map((b,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:b.xml}))];
+  return zipStore(files,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+}
+
 /* ================= SETTINGS ================= */
 function renderSettings(){
   const st=S.settings;
@@ -2265,6 +2763,16 @@ const A = {
     for(const id of s.files||[]) await deleteFileRaw(id); b.statements=b.statements.filter(x=>x!==s); await save(); toast('Statement deleted'); },
   'view-file':d=>{ viewFile(d.f); return false; },
   'dl-file':d=>{ downloadFile(d.f); return false; },
+  'rep-tab':d=>{ REP.tab=d.tab; REP.limit=300; saveRep(); },
+  'rep-sec':d=>{ REP.secs=REP.secs.includes(d.s)?REP.secs.filter(x=>x!==d.s):[...REP.secs,d.s]; if(REP.secs.length===S.sections.length) REP.secs=[]; REP.limit=300; saveRep(); },
+  'rep-sec-all':()=>{ REP.secs=[]; REP.limit=300; saveRep(); },
+  'rep-sort':d=>{ if(REP.sort===d.k) REP.dir=REP.dir==='asc'?'desc':'asc'; else { REP.sort=d.k; REP.dir=['date','amount','files'].includes(d.k)?'desc':'asc'; } saveRep(); },
+  'rep-more':()=>{ REP.limit=Infinity; },
+  'rep-reset':()=>{ Object.assign(REP,REP_DEF,{tab:REP.tab,cur:REP.cur,limit:300}); saveRep(); },
+  'rep-print':()=>{ REP.printAll=true; render(); addEventListener('afterprint',()=>{ REP.printAll=false; render(); },{once:true}); setTimeout(()=>print(),80); return false; },
+  'rep-pdf':()=>{ repPDF(); return false; },
+  'rep-xlsx':()=>{ repXLSX(); return false; },
+  'rep-csv':()=>{ repCSV(); return false; },
   'csv-course':d=>{ csvCourse(book(d.b)); return false; },
   'csv-saving':d=>{ csvSaving(book(d.b)); return false; },
   'csv-expense':d=>{ csvExpense(book(d.b)); return false; },
@@ -2314,9 +2822,15 @@ document.addEventListener('change',e=>{
   if(e.target.matches('[data-docfilter]')){ V.docFilter=e.target.value; render(); }
   if(e.target.matches('[data-docsection]')){ V.docSection=e.target.value; render(); }
   if(e.target.matches('[data-linefilter]')){ V.lineFilter=e.target.value; render(); }
+  if(e.target.matches('[data-rep]') && !e.target.hasAttribute('data-rep-live')) repSet(e.target);
   if(e.target.matches('[data-monthpick]') && /^\d{4}-\d{2}$/.test(e.target.value)){ V.month=e.target.value; render(); }
   if(e.target.id==='import-file' && e.target.files[0]) importBackup(e.target.files[0]);
   if(e.target.id==='set-autolock'){ S.settings.autoLock=+e.target.value; save(); armAutoLock.reset?.(); toast(S.settings.autoLock?`Session ends after ${S.settings.autoLock} minutes without activity`:'You stay logged in until you log out'); }
+});
+document.addEventListener('input',e=>{
+  if(!e.target.matches?.('[data-rep-live]')) return;
+  const pos=e.target.selectionStart; repSet(e.target);
+  const i=document.querySelector('[data-rep-live]'); if(i){ i.focus(); try{ i.setSelectionRange(pos,pos); }catch{} }
 });
 document.addEventListener('dragover',e=>{ const z=e.target.closest?.('[data-drop]'); if(z){ e.preventDefault(); z.classList.add('over'); } });
 document.addEventListener('dragleave',e=>{ e.target.closest?.('[data-drop]')?.classList.remove('over'); });
