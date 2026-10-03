@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003124920">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003124920">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003124920">
+<link rel="manifest" href="manifest.webmanifest?v=20261003131056">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003131056">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003131056">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -155,7 +155,7 @@ tr.row.open td{background:var(--accent-weak)}
 .b-paid,.b-ok{background:var(--ok-weak);color:var(--ok)} .b-overdue,.b-over{background:var(--bad-weak);color:var(--bad)}
 .b-due-soon{background:var(--warn-weak);color:var(--warn)} .b-partial{background:var(--info-weak);color:var(--info)}
 .b-upcoming,.b-unused{background:var(--gray-weak);color:var(--muted)} .b-waived{background:var(--gray-weak);color:var(--muted)}
-.b-deposit,.b-interest{background:var(--ok-weak);color:var(--ok)} .b-withdrawal{background:var(--bad-weak);color:var(--bad)} .b-payout{background:var(--info-weak);color:var(--info)}
+.b-deposit,.b-interest{background:var(--ok-weak);color:var(--ok)} .b-withdrawal{background:var(--bad-weak);color:var(--bad)} .b-payout{background:var(--info-weak);color:var(--info)} .b-payment{background:var(--ok-weak);color:var(--ok)} .b-charge{background:var(--bad-weak);color:var(--bad)} .b-fee{background:var(--warn-weak);color:var(--warn)} .b-none{background:var(--gray-weak);color:var(--muted)}
 .chit-strip{display:flex;gap:3px;flex-wrap:wrap;margin-top:10px}
 .chit-strip span{width:22px;height:22px;border-radius:5px;display:grid;place-items:center;font-size:10.5px;font-weight:700;background:var(--gray-weak);color:var(--muted)}
 .chit-strip span.paid{background:var(--ok);color:#fff} .chit-strip span.overdue{background:var(--bad);color:#fff} .chit-strip span.now{outline:2px solid var(--accent)}
@@ -297,7 +297,7 @@ iframe.preview{width:100%;height:70vh;border:1px solid var(--line)}
    Data: IndexedDB (state JSON + file blobs) in this browser
    ========================================================= */
 
-const CUR_SYM = {LKR:'Rs ',GBP:'£',USD:'$',EUR:'€',AUD:'A$',CAD:'C$',INR:'₹'};
+const CUR_SYM = {LKR:'Rs ',QAR:'QAR ',GBP:'£',USD:'$',EUR:'€',AUD:'A$',CAD:'C$',INR:'₹'};
 const CURRENCIES = Object.keys(CUR_SYM);
 const COURSE_CATS = ['Application Fee','Registration','Course Fee','University Fee','Exam Fee','Other'];
 const EXP_CATS = ['Housing / Rent','Food & Groceries','Transport','Utilities','Phone & Internet','Subscriptions','Loan / EMI','Insurance','Health','Personal','Family','Entertainment','Education','Other'];
@@ -314,6 +314,7 @@ const KINDS = {
   course: {label:'Payment schedule', icon:'📋', desc:'Fixed amounts due on set dates, with invoices & receipts — courses, loans, leasing, insurance, agreements…'},
   saving: {label:'Saving plan',      icon:'🏦', desc:'A target amount with a monthly contribution plan — deposits, withdrawals, interest & projection.'},
   expense:{label:'Monthly budget',   icon:'🧾', desc:'Budget lines and fixed bills tracked every month — household, personal, business…'},
+  debt:   {label:'Credit card / Loan', icon:'💳', desc:'A balance that grows with interest each statement — record statements and payments of any amount, see your debt-free date and compare repayment plans.'},
 };
 const ICONS = ['🎓','🏦','🧾','📋','🏠','🚗','🏍️','💳','📱','💡','🏥','✈️','💼','🛒','👨‍👩‍👧','🎁','📈','🕌','🐾','🎯'];
 const DEFAULT_SECTIONS = [
@@ -326,7 +327,8 @@ const LABELS = {
   bill:{paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'—'},
   budget:{ok:'Within budget',over:'Over budget',unused:'Nothing spent'},
 };
-const TXN_LABEL = {deposit:'Deposit',withdrawal:'Withdrawal',interest:'Interest / profit',payout:'Payout received'};
+const TXN_LABEL = {deposit:'Deposit',withdrawal:'Withdrawal',interest:'Interest / profit',payout:'Payout received',payment:'Payment',charge:'New spending',fee:'Bank fee'};
+LABELS.debt = {paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Upcoming',none:'No statement yet'};
 LABELS.payout = {paid:'Received','due-soon':'Due this month',upcoming:'Upcoming',overdue:'Not received yet'};
 /* Group saving = Seettu / chit fund (ROSCA): everyone pays the same each month, one member takes the whole pot each month */
 const isChit = b => b.type==='saving' && b.mode==='chit';
@@ -425,7 +427,7 @@ function save(){
 }
 
 function defaultState(){
-  return { version:2, settings:{rates:{GBP:400,USD:300,EUR:340,AUD:195,CAD:215,INR:3.5}, ratesUpdated:today(), dueSoonDays:7, theme:'light', lastBackup:null},
+  return { version:2, settings:{rates:{QAR:82,GBP:400,USD:300,EUR:340,AUD:195,CAD:215,INR:3.5}, ratesUpdated:today(), dueSoonDays:7, theme:'light', lastBackup:null},
     books:[], files:[], migrations:{bscDue8:true,addAws:true} };
 }
 
@@ -448,6 +450,7 @@ function migrate(){
     if(b.type==='course') b.items ||= [];
     if(b.type==='saving') b.txns ||= [];
     if(b.type==='expense'){ b.lines ||= []; b.txns ||= []; }
+    if(b.type==='debt'){ b.statements ||= []; b.txns ||= []; }
   }
   if(S.version!==2){ S.version=2; ch=true; }
   S.migrations.momSeettu=true;
@@ -456,6 +459,8 @@ function migrate(){
     S.migrations.renameChit=true; ch=true;
   }
   if(!S.migrations.householdsV1){ reorganiseHouseholds(); S.migrations.householdsV1=true; ch=true; }
+  if(S.settings.rates.QAR==null){ S.settings.rates.QAR=82; ch=true; }
+  S.migrations.bankCardV1=true;
   return ch;
 }
 
@@ -615,6 +620,54 @@ function savCalc(b){
     balanceLKR:balance*r, targetLKR:target*r, needNow, needNowLKR:needNow*r, missedAmt:sum(missed,x=>x.short)};
 }
 
+/* ================= CREDIT CARD / LOAN ================= */
+const DEBT_MODES={fixed:'Fixed amount','fixed+min':'Amount + minimum',min:'Minimum only',full:'Full statement balance'};
+function planLabel(mode,amt,b){ const a=fmt(+amt||0,b.currency||'QAR'); return mode==='min'?'Minimum only':mode==='full'?'Full statement balance':mode==='fixed+min'?`${a} + minimum (${b.minPct??3}%)`:`${a} a month`; }
+function planPay(mode,amt,stmtBal,min){ return Math.min(stmtBal, mode==='min'?min : mode==='full'?stmtBal : mode==='fixed+min'?(+amt||0)+min : (+amt||0)); }
+/* month-by-month projection exactly like the repayment plan: fees on the balance at each statement, then your payment */
+function debtProject(b,startBal,firstStmt,mode,amt,spend){
+  const iP=(+b.interestPct||0)/100, sP=(+b.insurancePct||0)/100, mP=(+(b.minPct??3))/100, dDay=+b.dueDay||4, sDay=+b.statementDay||19;
+  const rows=[]; let B=startBal, date=firstStmt, totI=0, totS=0, totPay=0;
+  while(B>0.005 && rows.length<120){
+    const int=B*iP, ins=B*sP, stmtBal=B+int+ins+(+spend||0), min=stmtBal*mP, pay=planPay(mode,amt,stmtBal,min);
+    if(pay<=0) break;
+    const open=B; B=Math.max(0,stmtBal-pay); totI+=int; totS+=ins; totPay+=pay;
+    rows.push({stmt:date,open,int,ins,fees:int+ins,spend:+spend||0,stmtBal,min,pay,due:monthDay(ymAdd(date.slice(0,7),1),dDay),rest:B});
+    date=monthDay(ymAdd(date.slice(0,7),1),sDay);
+  }
+  return {rows,int:totI,ins:totS,fees:totI+totS,paid:totPay,months:rows.length,never:B>0.005,end:rows.length?rows[rows.length-1].due:null};
+}
+function debtCalc(b){
+  const cur=b.currency||'QAR', r=rate(cur), t=today();
+  const st=[...(b.statements||[])].sort((a,c)=>a.date.localeCompare(c.date)), tx=[...(b.txns||[])].sort((a,c)=>a.date.localeCompare(c.date));
+  const last=st[st.length-1]||null, anchor=last?last.date:(b.startDate||'0000-00-00'), anchorBal=last?+last.closing:(+b.startBalance||0);
+  const after=tx.filter(x=>x.date>anchor);
+  const balance=Math.max(0,anchorBal-sum(after.filter(x=>x.type==='payment'),x=>+x.amount)+sum(after.filter(x=>x.type!=='payment'),x=>+x.amount));
+  const dDay=+b.dueDay||4, sDay=+b.statementDay||19, mP=+(b.minPct??3);
+  let due=null, minDue=0, planned=0, paidCycle=0, status='none';
+  if(last){
+    due=last.dueDate||monthDay(ymAdd(last.date.slice(0,7),1),dDay);
+    minDue=(last.minDue!=null&&last.minDue!=='')?+last.minDue:Math.round(last.closing*mP)/100;
+    planned=planPay(b.planMode||'fixed+min',b.planAmount,+last.closing,minDue);
+    paidCycle=sum(after.filter(x=>x.type==='payment'),x=>+x.amount);
+    status = paidCycle>=planned-0.005||balance<=0.005 ? 'paid' : due<t ? (paidCycle>=minDue-0.005?'partial':'overdue') : paidCycle>0 ? 'partial' : dateStatus(false,false,due);
+  }
+  const remainingCycle=status==='paid'?0:Math.max(0,planned-paidCycle);
+  const minLeft=Math.max(0,minDue-paidCycle);
+  let next=monthDay(ymNow(),sDay); if(next<=t) next=monthDay(ymAdd(ymNow(),1),sDay); if(last&&next<=last.date) next=monthDay(ymAdd(last.date.slice(0,7),1),sDay);
+  // this cycle's planned payment counts first, then the projection continues from what is left
+  const startBal=Math.max(0,balance-remainingCycle);
+  const proj=debtProject(b,startBal,next,b.planMode||'fixed+min',b.planAmount,b.monthlySpend);
+  if(remainingCycle>0) proj.rows.unshift({current:true,stmt:last.date,open:balance,int:0,ins:0,fees:0,spend:0,stmtBal:balance,min:minLeft,pay:remainingCycle,due,rest:startBal});
+  if(remainingCycle>0){ proj.months++; proj.paid+=remainingCycle; if(!proj.end) proj.end=due; }
+  const peak=Math.max(+b.startBalance||0,...st.map(s=>Math.max(+s.opening||0,+s.closing||0)),balance);
+  const intPaid=sum(st,s=>+s.interest), insPaid=sum(st,s=>+s.insurance);
+  return {cur,r,st,tx,last,balance,balanceLKR:balance*r,limit:+b.limit||0,util:b.limit?Math.round(balance/b.limit*100):0,
+    due,minDue,minLeft,planned,paidCycle,remainingCycle,status,next,proj,peak,paidDown:Math.max(0,peak-balance),pct:peak?Math.round((peak-balance)/peak*100):0,
+    intPaid,insPaid,feesPaid:intPaid+insPaid,monthlyRate:(+b.interestPct||0)+(+b.insurancePct||0),
+    totalPaid:sum(tx.filter(x=>x.type==='payment'),x=>+x.amount)};
+}
+
 /* ================= EXPENSES ================= */
 const lineActive = (l,m) => (!l.startMonth||l.startMonth<=m) && (!l.endMonth||m<=l.endMonth);
 function expCalc(b,m){
@@ -644,6 +697,7 @@ const saveUI = () => { try{ localStorage.setItem('fb-ui',JSON.stringify(UI)); }c
 function bookFlag(b){
   if(b.type==='course'){ const k=courseCalc(b); return {pct:k.pct,alerts:k.overdueN}; }
   if(b.type==='saving'){ const k=savCalc(b); return {pct:k.pct,alerts:k.missed.length+(k.chit&&k.payoutStatus==='overdue'?1:0)}; }
+  if(b.type==='debt'){ const k=debtCalc(b); return {pct:k.pct,alerts:k.status==='overdue'?1:0}; }
   const k=expCalc(b,ymNow()); return {pct:k.pct,alerts:k.billsOverdue.length,over:k.pct>100};
 }
 function renderSidebar(){
@@ -717,6 +771,7 @@ function render(){
   if(b && b.type==='course') m.innerHTML=renderCourse(b);
   else if(b && b.type==='saving') m.innerHTML=renderSaving(b);
   else if(b && b.type==='expense') m.innerHTML=renderExpense(b);
+  else if(b && b.type==='debt') m.innerHTML=renderDebt(b);
   else if(V.page==='documents') m.innerHTML=renderDocuments();
   else if(V.page==='settings') m.innerHTML=renderSettings();
   else { V.page='dashboard'; m.innerHTML=renderDashboard(); }
@@ -738,15 +793,19 @@ function actionList(){
     for(const row of k.bills) if(row.status!=='paid' && row.due<=lim && (row.status==='overdue'||row.due>=t))
       out.push({date:row.due,b,title:`${row.l.name} bill`,amt:fmt(Math.max(0,row.remaining),k.cur),lkr:null,st:badge(row.status,'bill'),
         btn:`<button class="btn sm ok" data-act="exp-txn" data-b="${b.id}" data-l="${row.l.id}" data-amount="${Math.max(0,row.remaining)}" data-ym="${m}">Pay</button>`}); }
+  for(const b of booksOf('debt')){ const k=debtCalc(b);
+    if(k.due && k.remainingCycle>0 && k.due<=lim) out.push({date:k.due,b,title:`${b.name} payment`,amt:fmt(k.remainingCycle,k.cur),lkr:k.cur!=='LKR'?k.remainingCycle*k.r:null,st:badge(k.status,'debt'),
+      btn:`<button class="btn sm ok" data-act="debt-txn" data-b="${b.id}" data-type="payment" data-amount="${k.remainingCycle}">Pay</button>`}); }
   return out.sort((a,b)=>a.date.localeCompare(b.date));
 }
 
 function sectionNeed(s,now){
   if(s.kind==='course') return allCourseCalc(s.id).monthLKR;
   if(s.kind==='saving') return sum(booksIn(s.id),b=>savCalc(b).needNowLKR);
+  if(s.kind==='debt') return sum(booksIn(s.id),b=>{ const k=debtCalc(b); return k.due&&k.due<=monthDay(now,31)?k.remainingCycle*k.r:0; });
   return sum(booksIn(s.id),b=>{ const k=expCalc(b,now); return k.need*k.r; });
 }
-const NEED_WORD = {course:'due',saving:'to put aside',expense:'still to spend'};
+const NEED_WORD = {course:'due',saving:'to put aside',expense:'still to spend',debt:'to pay'};
 
 function renderDashboard(){
   const t=today(), now=ymNow();
@@ -759,8 +818,9 @@ function renderDashboard(){
   const chits=sv.filter(x=>x.k.chit), chitOwe=sum(chits,x=>x.k.oweLKR), incoming=sum(chits,x=>x.k.payoutDueLKR);
   const expBudget=sum(ex,x=>x.k.budget*x.k.r), expSpent=sum(ex,x=>x.k.spent*x.k.r);
   const income=sum(ex,x=>x.k.income*x.k.r);
-  const overdueLKR=ac.overdueLKR+sum(sv,x=>x.k.missedAmt*x.k.r)+sum(ex,x=>sum(x.k.billsOverdue,r=>Math.max(0,r.remaining))*x.k.r);
-  const overdueN=ac.overdueN+sum(sv,x=>x.k.missed.length)+sum(ex,x=>x.k.billsOverdue.length);
+  const overdueLKR=sum(booksOf('debt').map(b=>debtCalc(b)).filter(k=>k.status==='overdue'),k=>k.minLeft*k.r)+ac.overdueLKR+sum(sv,x=>x.k.missedAmt*x.k.r)+sum(ex,x=>sum(x.k.billsOverdue,r=>Math.max(0,r.remaining))*x.k.r);
+  const dk=booksOf('debt').map(b=>debtCalc(b)).filter(k=>k.status==='overdue');
+  const overdueN=ac.overdueN+sum(sv,x=>x.k.missed.length)+sum(ex,x=>x.k.billsOverdue.length)+dk.length;
   const acts=actionList();
   const backupDays = S.settings.lastBackup ? diffDays(S.settings.lastBackup.slice(0,10),t) : null;
   const foreign=[...new Set([...Object.keys(ac.byCur),...sv.map(x=>x.k.cur),...ex.map(x=>x.k.cur)])].filter(c=>c!=='LKR');
@@ -784,6 +844,10 @@ function renderDashboard(){
       return `<div class="card kpi" style="cursor:pointer" ${n===1?`data-act="open-book" data-b="${booksIn(s.id)[0].id}"`:''}><div class="l">${s.icon} ${s.name==='Courses'?'Course fees balance':esc(s.name)+' balance'}</div><div class="v">${fmtLKR(k.balLKR)}</div>
         <div class="s">Paid ${fmtLKR(k.paidLKR)} of ${fmtLKR(k.totalLKR)} · ${n} ${esc(n===1?(s.itemName||'item'):(s.itemName||'item')+'s')}</div><div style="margin-top:8px">${pctBar(k.pct)}</div>
         <div class="s">${k.next?`Next: ${fmtLKR(k.next.lkr)} on ${fmtDate(k.next.dueDate)}`:'Nothing scheduled'}${k.overdueN?` · <b class="neg">${fmtLKR(k.overdueLKR)} overdue</b>`:''}</div></div>`; }).join('')}
+    ${booksOf('debt').map(b=>{ const k=debtCalc(b), F=v=>fmt(v,k.cur);
+      return `<div class="card kpi ${k.status==='overdue'?'bad':''}" style="cursor:pointer" data-act="open-book" data-b="${b.id}"><div class="l">${secOf(b).icon} ${esc(b.name)}</div><div class="v">${F(k.balance)}</div>
+        <div class="s">${k.cur!=='LKR'?'≈ '+fmtLKR(k.balanceLKR)+' · ':''}debt-free ${k.balance<=0.005?'now 🎉':k.proj.never?'<b class="neg">never at this plan</b>':ymLabel(k.proj.end.slice(0,7))}</div><div style="margin-top:8px">${pctBar(k.pct)}</div>
+        <div class="s">${k.status==='paid'?'✅ This cycle paid':k.due?`Pay ${F(k.remainingCycle)} by ${fmtDate(k.due)}`:'Add a statement'}</div></div>`; }).join('')}
     <div class="card kpi ok"><div class="l">🏦 Total saved</div><div class="v">${fmtLKR(savBal)}</div><div class="s">${savTarget?`${Math.round(savBal/savTarget*100)}% of ${fmtLKR(savTarget)} target`:sv.length?'':'No saving plans yet'}${chits.length?`${savTarget?'<br>':''}Seettu: ${chitOwe?`<b class="neg">you owe ${fmtLKR(chitOwe)}</b> in future contributions`:`${fmtLKR(sum(chits,x=>x.k.savedLKR))} paid in, not yet received`}`:''}</div>${savTarget?`<div style="margin-top:8px">${pctBar(savBal/savTarget*100)}</div>`:''}</div>
     <div class="card kpi"><div class="l">🧾 Spent in ${MON[+now.slice(5)-1]}</div><div class="v">${fmtLKR(expSpent)}</div><div class="s">${expBudget?`of ${fmtLKR(expBudget)} budget`:'No monthly budget yet'}${income?` · income ${fmtLKR(income)}`:''}</div>${expBudget?`<div style="margin-top:8px">${pctBar(expSpent/expBudget*100,expSpent>expBudget?'over':'')}</div>`:''}</div>
     <div class="card kpi ${overdueN?'bad':''}"><div class="l">Overdue / missed</div><div class="v">${fmtLKR(overdueLKR)}</div><div class="s">${overdueN} item(s) need attention</div></div>
@@ -832,6 +896,13 @@ function dashSection(s,now){
       <div class="sub">${k.cm?`This month: ${fmt(k.cm.deposited,k.cur)} / ${fmt(k.cm.planned,k.cur)} ${badge(k.cm.status,'saving')}`:k.monthly?'No contribution planned this month':'No monthly plan set'}</div>
       <div class="sub" style="margin-top:4px">${k.finish==='reached'?'🎉 Target reached':k.finish?`Projected to reach target ${fmtDate(k.finish)}`:''}${k.missed.length?` · <b class="neg">${k.missed.length} missed</b>`:''}</div>
     </div>`;}).join('')}</div>`;
+  if(s.kind==='debt') return head+`<div class="grid cards">${books.map(b=>{ const k=debtCalc(b), F=v=>fmt(v,k.cur); return `<div class="card bk-card" style="--c:${esc(b.color)}" data-act="open-book" data-b="${b.id}">
+      <div class="row-flex"><div><b>${esc(b.name)}</b><div class="sub">${esc(b.institution||'')} ${esc(b.cardRef||'')}</div></div><b style="font-size:18px">${k.pct}%</b></div>
+      <div style="font-size:20px;font-weight:700;margin-top:8px">${F(k.balance)} <span class="sub">left · paid down ${F(k.paidDown)}</span></div>
+      <div style="margin:8px 0">${pctBar(k.pct)}</div>
+      <div class="sub">${k.status==='paid'?'✅ This cycle paid':k.due?`Next: ${F(k.remainingCycle)} by ${fmtDate(k.due)} ${badge(k.status,'debt')}`:'Add your latest statement'}</div>
+      <div class="sub" style="margin-top:4px">Plan: ${planLabel(b.planMode||'fixed+min',b.planAmount,b)} · debt-free <b>${k.balance<=0.005?'now':k.proj.never?'never':ymLabel(k.proj.end.slice(0,7))}</b></div>
+    </div>`; }).join('')}</div>`;
   return head+`<div class="grid cards">${books.map(b=>{ const k=expCalc(b,now); return `<div class="card bk-card" style="--c:${esc(b.color)}" data-act="open-book" data-b="${b.id}">
       <div class="row-flex"><b>${esc(b.name)}</b><b style="font-size:18px" class="${k.spent>k.budget&&k.budget?'neg':''}">${k.budget?k.pct+'%':''}</b></div>
       <div style="font-size:20px;font-weight:700;margin-top:8px">${fmt(k.spent,k.cur)} <span class="sub">spent of ${fmt(k.budget,k.cur)} in ${ymLabel(now)}</span></div>
@@ -846,6 +917,7 @@ function recentActivity(){
   const out=[];
   for(const c of booksOf('course')) for(const it of c.items) for(const p of it.payments) out.push({date:p.date,b:c,title:it.title,amt:fmt(p.amount,it.currency),sign:'',files:p.files});
   for(const b of booksOf('saving')) for(const x of b.txns) out.push({date:x.date,b,title:`${txnLabel(b,x.type)}${isChit(b)?' (Seettu)':''}`,amt:fmt(x.amount,b.currency||'LKR'),sign:x.type==='withdrawal'?'neg':'pos',files:x.files});
+  for(const b of booksOf('debt')) for(const x of b.txns) out.push({date:x.date,b,title:TXN_LABEL[x.type],amt:fmt(x.amount,b.currency||'QAR'),sign:x.type==='payment'?'pos':'neg',files:x.files});
   for(const b of booksOf('expense')) for(const x of b.txns){ const l=b.lines.find(l=>l.id===x.lineId); out.push({date:x.date,b,title:l?l.name:'Unplanned expense',amt:fmt(x.amount,b.currency||'LKR'),sign:'',files:x.files}); }
   out.sort((a,b)=>b.date.localeCompare(a.date));
   return out.slice(0,10).map(a=>`<div class="list-row"><div class="grow"><b>${esc(a.title)}</b><div class="sub">${secOf(a.b).icon} ${esc(a.b.name)} · ${fmtDate(a.date)}</div></div>
@@ -1124,6 +1196,153 @@ function chitOverview(b,k){
 }
 
 /* ================= EXPENSE PAGE ================= */
+function renderDebt(b){
+  const k=debtCalc(b), cur=k.cur, p=k.proj, F=v=>fmt(v,cur);
+  if(!['plan','statements','payments','compare','docs','notes'].includes(V.tab)) V.tab='plan';
+  const body = V.tab==='statements'?debtStatements(b,k) : V.tab==='payments'?debtPayments(b,k) : V.tab==='compare'?debtCompare(b,k) : V.tab==='docs'?bookDocs(b) : V.tab==='notes'?debtNotes(b,k) : debtPlan(b,k);
+  const tb=`<div class="toolbar"><span class="sp"></span>
+    <button class="btn ok" data-act="debt-txn" data-b="${b.id}" data-type="payment" data-amount="${k.remainingCycle||''}">💳 Record payment</button>
+    <button class="btn" data-act="debt-stmt" data-b="${b.id}">🧾 Add statement</button>
+    <button class="btn" data-act="debt-txn" data-b="${b.id}" data-type="charge">➕ New spending</button>
+    <button class="btn" data-act="book-modal" data-b="${b.id}">⚙ Edit plan</button></div>`;
+  return `${bookHeader(b,`${esc(b.institution||'')}${b.cardRef?' · '+esc(b.cardRef):''}${k.limit?' · limit '+F(k.limit):''} · statement on the ${ordinal(+b.statementDay||19)} · pay by the ${ordinal(+b.dueDay||4)} of next month`)}
+  ${k.status==='overdue'?`<div class="banner bad">⚠ Payment overdue — at least the minimum ${F(k.minLeft)} was due ${fmtDate(k.due)}. A late minimum costs a fee.</div>`:''}
+  ${k.status==='due-soon'?`<div class="banner">⏰ Pay ${F(k.remainingCycle)} by ${fmtDate(k.due)} (${relDate(k.due)}) — minimum ${F(k.minLeft)}.</div>`:''}
+  ${!k.last?'<div class="banner">Add your latest statement (🧾 Add statement) to see due dates and your plan.</div>':''}
+  <div class="grid kpis">
+    <div class="card kpi ${k.balance?'':'ok'}"><div class="l">Balance now</div><div class="v">${F(k.balance)}</div>${cur!=='LKR'?`<div class="s">≈ ${fmtLKR(k.balanceLKR)}</div>`:''}${k.limit?`<div style="margin-top:8px">${pctBar(k.util,k.util>70?'over':k.util>30?'warn':'')}</div><div class="s">${k.util}% of ${F(k.limit)} limit used</div>`:''}</div>
+    <div class="card kpi ${k.status==='overdue'?'bad':k.status==='paid'?'ok':'warn'}"><div class="l">This cycle${k.due?' · due '+fmtDate(k.due):''}</div><div class="v">${k.status==='paid'?'✅ Paid':k.due?F(k.remainingCycle):'—'}</div>
+      <div class="s">${k.last?`Statement ${F(k.last.closing)} · minimum ${F(k.minDue)} · your plan ${F(k.planned)}<br>Paid this cycle ${F(k.paidCycle)} ${badge(k.status,'debt')}`:'No statement yet'}</div></div>
+    <div class="card kpi ${p.never?'bad':'ok'}"><div class="l">Debt-free</div><div class="v">${k.balance<=0.005?'🎉 Now':p.never?'Never':p.end?ymLabel(p.end.slice(0,7)):'—'}</div>
+      <div class="s">${p.never?'Your plan doesn\'t cover interest + new spending — pay more':`${p.months} more payment(s) · bank fees ≈ ${F(p.fees)}`}</div></div>
+    <div class="card kpi"><div class="l">Paid down so far</div><div class="v">${F(k.paidDown)}</div><div style="margin-top:8px">${pctBar(k.pct)}</div><div class="s">${k.pct}% of the ${F(k.peak)} peak</div></div>
+    <div class="card kpi"><div class="l">Bank fees so far</div><div class="v">${F(k.feesPaid)}</div><div class="s">interest ${F(k.intPaid)} + insurance ${F(k.insPaid)} · ${k.st.length} statement(s)</div></div>
+    <div class="card kpi"><div class="l">Your plan</div><div class="v" style="font-size:16px">${planLabel(b.planMode||'fixed+min',b.planAmount,b)}</div>
+      <div class="s">fees ${b.interestPct||0}% + ${b.insurancePct||0}% = ${k.monthlyRate.toFixed(2)}%/month (~${Math.round(k.monthlyRate*12)}%/year)${+b.monthlySpend?`<br>+ ${F(b.monthlySpend)} new spending a month`:''}</div></div>
+  </div>
+  ${tb}
+  ${tabsHtml([['plan','📅 Repayment plan'],['statements','🧾 Statements'],['payments','💳 Payments & spending'],['compare','⚖️ Compare plans'],['docs','📁 Documents'],['notes','ℹ️ Notes & tips']])}
+  ${body}`;
+}
+function debtPlan(b,k){
+  const p=k.proj, F=v=>fmt(v,k.cur);
+  if(k.balance<=0.005) return '<div class="card empty">🎉 Fully paid. Pay the full statement balance every month from now on and you will never pay interest.</div>';
+  return `<div class="sub" style="margin-bottom:8px">Plan: <b>${planLabel(b.planMode||'fixed+min',b.planAmount,b)}</b>${+b.monthlySpend?` · assumes ${F(b.monthlySpend)} new spending each month`:' · assumes no new spending on the card'}. Change it with ⚙ Edit plan — or see other options in ⚖️ Compare plans.</div>
+  <div class="tbl-wrap"><table><thead><tr><th>Statement</th><th class="num">Balance</th><th class="num">Interest</th><th class="num">Insurance</th><th class="num">Bank total</th><th class="num">Minimum</th><th>Pay by</th><th class="num">You pay</th><th class="num">Left after</th></tr></thead><tbody>
+  ${p.rows.map(x=>`<tr${x.current?' style="background:var(--accent-weak)"':''}><td class="nowrap">${x.current?'<b>This cycle</b>':fmtDate(x.stmt)}</td><td class="num">${F(x.open)}</td><td class="num">${x.current?'—':F(x.int)}</td><td class="num">${x.current?'—':F(x.ins)}</td><td class="num">${x.current?'—':F(x.fees)}</td><td class="num">${F(x.min)}</td><td class="nowrap">${fmtDate(x.due)}</td><td class="num"><b>${F(x.pay)}</b></td><td class="num">${x.rest<=0.005?'<b class="pos">0.00 ✓</b>':F(x.rest)}</td></tr>`).join('')}
+  </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num"><b>${F(p.int)}</b></td><td class="num"><b>${F(p.ins)}</b></td><td class="num"><b>${F(p.fees)}</b></td><td colspan="2"></td><td class="num"><b>${F(p.paid)}</b></td><td></td></tr></tfoot></table></div>
+  <div class="hint">${p.never?'<b class="neg">At this plan the balance never reaches zero.</b> ':`<b>Debt-free ${ymLabel(p.end.slice(0,7))}</b> after ${p.months} payment(s). `}Estimates use ${k.monthlyRate.toFixed(2)}%/month; the bank counts interest by day, so real statements can differ by a few riyals — add each new statement to keep it exact.</div>`;
+}
+function debtStatements(b,k){
+  const F=v=>fmt(v,k.cur), st=k.st;
+  return `<div class="tbl-wrap"><table><thead><tr><th>Statement</th><th class="num">Opening</th><th class="num">You paid</th><th class="num">New spending</th><th class="num">Interest</th><th class="num">Insurance</th><th class="num">Bank total</th><th class="num">Closing</th><th class="num">Minimum</th><th class="no-print"></th></tr></thead><tbody>
+  ${st.map(s=>`<tr><td class="nowrap"><b>${fmtDate(s.date)}</b>${s.note?`<div class="sub">${esc(s.note)}</div>`:''}<div>${(s.files||[]).map(fileChip).join('')}</div></td><td class="num">${F(s.opening)}</td><td class="num pos">${F(s.paid)}</td><td class="num">${F(s.spend)}</td><td class="num">${F(s.interest)}</td><td class="num">${F(s.insurance)}</td><td class="num">${F((+s.interest)+(+s.insurance))}</td><td class="num"><b>${F(s.closing)}</b></td><td class="num">${s.minDue!=null&&s.minDue!==''?F(s.minDue):'<span class="muted">—</span>'}</td>
+    <td class="nowrap no-print"><button class="icon-btn" title="Edit" data-act="debt-stmt" data-b="${b.id}" data-s="${s.id}">✏️</button><button class="icon-btn" title="Delete" data-act="del-stmt" data-b="${b.id}" data-s="${s.id}">🗑</button></td></tr>`).join('')||'<tr><td colspan="10" class="empty">No statements yet — add your latest one.</td></tr>'}
+  </tbody><tfoot><tr><td colspan="2"><b>Total</b></td><td class="num pos"><b>${F(sum(st,s=>+s.paid))}</b></td><td class="num"><b>${F(sum(st,s=>+s.spend))}</b></td><td class="num"><b>${F(k.intPaid)}</b></td><td class="num"><b>${F(k.insPaid)}</b></td><td class="num"><b>${F(k.feesPaid)}</b></td><td colspan="3"></td></tr></tfoot></table></div>
+  <div class="hint">Add each monthly statement (19th) — it keeps the balance exact and shows what the bank charged. Attach the statement PDF to it.</div>`;
+}
+function debtPayments(b,k){
+  const F=v=>fmt(v,k.cur), list=[...k.tx].reverse();
+  return `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Type</th><th class="num">Amount</th><th>Method / Ref</th><th>Note</th><th>Files</th><th class="no-print"></th></tr></thead><tbody>
+  ${list.map(x=>`<tr><td class="nowrap">${fmtDate(x.date)}</td><td><span class="badge b-${x.type}">${TXN_LABEL[x.type]}</span></td><td class="num ${x.type==='payment'?'pos':'neg'}">${x.type==='payment'?'−':'+'}${F(x.amount)}</td>
+    <td>${esc(x.method||'')}<div class="sub">${esc(x.ref||'')}</div></td><td class="sub">${esc(x.note||'')}</td><td>${(x.files||[]).map(fileChip).join('')}</td>
+    <td class="nowrap no-print"><button class="icon-btn" data-act="debt-txn" data-b="${b.id}" data-t="${x.id}">✏️</button><button class="icon-btn" data-act="del-txn" data-b="${b.id}" data-t="${x.id}">🗑</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">No payments recorded yet</td></tr>'}
+  </tbody><tfoot><tr><td colspan="2"><b>Total paid</b></td><td class="num pos"><b>${F(k.totalPaid)}</b></td><td colspan="4"></td></tr></tfoot></table></div>
+  <div class="hint">Payments made <i>before</i> your latest statement are already inside that statement's "You paid" — record here what you pay after it. Payments of any amount count.</div>`;
+}
+function debtCompare(b,k){
+  const F=v=>fmt(v,k.cur), A=+b.planAmount||500, start=Math.max(0,k.balance-k.remainingCycle), spend=+b.monthlySpend||0;
+  const opts=[['fixed',A],['fixed+min',A],['fixed',A*2],['fixed+min',100],['min',0]];
+  const row=(mode,amt,sp)=>{ const p=debtProject(b,start,k.next,mode,amt,sp); return {mode,amt,p}; };
+  const cols=opts.map(([m,a])=>row(m,a,spend)), alt=spend?opts.map(([m,a])=>row(m,a,0)):null;
+  const cell=x=>x.p.never?'<b class="neg">Never</b>':ymLabel(x.p.end.slice(0,7));
+  const table=(arr,title)=>`<h2 style="margin-top:14px">${title}</h2><div class="tbl-wrap"><table><thead><tr><th></th>${arr.map(x=>`<th class="num">${planLabel(x.mode,x.amt,b)}</th>`).join('')}</tr></thead><tbody>
+    <tr><td>Monthly payment</td>${arr.map(x=>{ const ps=x.p.rows.map(r=>r.pay); return `<td class="num">${ps.length?(Math.min(...ps).toFixed(0)===Math.max(...ps).toFixed(0)?F(ps[0]):F(Math.min(...ps))+' – '+F(Math.max(...ps))):'—'}</td>`; }).join('')}</tr>
+    <tr><td>Interest</td>${arr.map(x=>`<td class="num">${x.p.never?'—':F(x.p.int)}</td>`).join('')}</tr>
+    <tr><td>Insurance</td>${arr.map(x=>`<td class="num">${x.p.never?'—':F(x.p.ins)}</td>`).join('')}</tr>
+    <tr><td><b>Bank fees total</b></td>${arr.map(x=>`<td class="num"><b>${x.p.never?'—':F(x.p.fees)}</b></td>`).join('')}</tr>
+    <tr><td><b>Debt-free</b></td>${arr.map(x=>`<td class="num"><b>${cell(x)}</b>${x.p.never?'':`<div class="sub">${x.p.months} payments</div>`}</td>`).join('')}</tr>
+  </tbody></table></div>`;
+  return `<p class="sub">From the balance after this cycle (${F(start)}), starting with the ${fmtDate(k.next)} statement. Your current plan: <b>${planLabel(b.planMode||'fixed+min',b.planAmount,b)}</b>.</p>
+  ${table(cols,spend?`With ${F(spend)} new spending every month`:'If you add no new spending to the card')}
+  ${alt?table(alt,'If you stop all new spending on the card'):''}
+  <div class="hint">Paying more each month cuts the fees, because the bank charges ${k.monthlyRate.toFixed(2)}% on whatever is left. Paying only the minimum takes years.</div>`;
+}
+function debtNotes(b,k){
+  return `<div class="grid two"><div class="card"><h2>Card details</h2><table><tbody>
+    <tr><td class="muted">Bank</td><td>${esc(b.institution||'—')}</td></tr><tr><td class="muted">Card</td><td>${esc(b.cardRef||'—')}</td></tr>
+    <tr><td class="muted">Credit limit</td><td>${fmt(+b.limit||0,k.cur)}</td></tr>
+    <tr><td class="muted">Statement / due</td><td>${ordinal(+b.statementDay||19)} / ${ordinal(+b.dueDay||4)} of next month</td></tr>
+    <tr><td class="muted">Monthly charges</td><td>interest ${b.interestPct||0}% + insurance ${b.insurancePct||0}%</td></tr>
+    <tr><td class="muted">Minimum</td><td>${b.minPct??3}% of the statement</td></tr>
+    <tr><td class="muted">Auto-debit</td><td>${esc(b.autoDebit||'—')}</td></tr></tbody></table></div>
+  <div class="card"><div class="row-flex"><h2>Notes & tips</h2><button class="btn sm" data-act="book-modal" data-b="${b.id}">Edit</button></div><div class="notes">${esc(b.notes||'No notes')}</div></div></div>`;
+}
+function debtStmtModal(bid,sid){
+  const b=book(bid), s=sid?b.statements.find(x=>x.id===sid):null, cur=b.currency||'QAR';
+  const prev=[...b.statements].filter(x=>x!==s).sort((a,c)=>a.date.localeCompare(c.date)).filter(x=>!s||x.date<s.date).pop();
+  const defDate=s?.date||(()=>{ let d=monthDay(ymNow(),+b.statementDay||19); if(d>today()) d=monthDay(ymAdd(ymNow(),-1),+b.statementDay||19); return d; })();
+  const opening=s?.opening??(prev?+prev.closing:(+b.startBalance||0));
+  const win=x=>x.date>(prev?prev.date:'0000')&&x.date<=defDate;
+  const paid=s?.paid??Math.round(sum(b.txns.filter(x=>x.type==='payment'&&win(x)),x=>+x.amount)*100)/100;
+  const spend=s?.spend??Math.round(sum(b.txns.filter(x=>x.type!=='payment'&&win(x)),x=>+x.amount)*100)/100;
+  const est=v=>Math.round(opening*v)/100;
+  modal({title:`${s?'Edit':'Add'} statement — ${esc(b.name)}`,body:`<div class="form">
+    <div><label>Statement date</label><input type="date" name="date" value="${defDate}"></div>
+    <div><label>Opening balance (${cur})</label><input type="number" step="0.01" name="opening" value="${opening}"></div>
+    <div><label>You paid (in this statement)</label><input type="number" step="0.01" min="0" name="paid" value="${paid}"></div>
+    <div><label>New spending</label><input type="number" step="0.01" min="0" name="spend" value="${spend}"></div>
+    <div><label>Interest charged</label><input type="number" step="0.01" min="0" name="interest" value="${s?.interest??est(+b.interestPct||0)}"></div>
+    <div><label>Insurance / other fees</label><input type="number" step="0.01" min="0" name="insurance" value="${s?.insurance??est(+b.insurancePct||0)}"></div>
+    <div><label>Closing balance (from statement)</label><input type="number" step="0.01" name="closing" value="${s?.closing??''}"></div>
+    <div><label>Minimum due</label><input type="number" step="0.01" min="0" name="minDue" value="${s?.minDue??''}"></div>
+    <div><label>Payment due date</label><input type="date" name="dueDate" value="${s?.dueDate||''}"></div>
+    <div><label>Note</label><input type="text" name="note" value="${esc(s?.note||'')}"></div>
+    <div class="full calc-box" id="st-check"></div>
+    ${filesField(s?.files,'Statement PDF')}
+  </div>`,
+  onOpen(f){
+    wireFiles(f);
+    const u=()=>{ const g=n=>+f.elements[n].value||0, calc=g('opening')-g('paid')+g('spend')+g('interest')+g('insurance');
+      if(!f.elements.closing.dataset.touched) f.elements.closing.value=calc.toFixed(2);
+      if(!f.elements.minDue.dataset.touched) f.elements.minDue.value=(g('closing')*(+(b.minPct??3))/100).toFixed(2);
+      if(!f.elements.dueDate.dataset.touched&&f.elements.date.value) f.elements.dueDate.value=monthDay(ymAdd(f.elements.date.value.slice(0,7),1),+b.dueDay||4);
+      const diff=g('closing')-calc; f.querySelector('#st-check').innerHTML=Math.abs(diff)<0.02?'✅ Opening − paid + spending + fees = closing':`⚠ Difference of ${fmt(diff,cur)} — check the figures (or there are other charges/refunds)`; };
+    ['closing','minDue','dueDate'].forEach(n=>f.elements[n].addEventListener('input',()=>f.elements[n].dataset.touched=1));
+    if(s) ['closing','minDue','dueDate'].forEach(n=>f.elements[n].dataset.touched=1);
+    f.addEventListener('input',u); u();
+  },
+  async onSubmit(f){
+    const g=n=>+val(f,n)||0, d={date:val(f,'date'),opening:g('opening'),paid:g('paid'),spend:g('spend'),interest:g('interest'),insurance:g('insurance'),closing:g('closing'),minDue:val(f,'minDue')===''?null:g('minDue'),dueDate:val(f,'dueDate'),note:val(f,'note')};
+    if(!d.date){ toast('Enter the statement date'); return false; }
+    const x=s||{id:uid(),files:[]}; Object.assign(x,d);
+    x.files=await applyFiles(f,x.files,{bookId:b.id,stmtId:x.id,docType:'Bank Statement',title:`Statement ${fmtDate(d.date)}`,note:b.name});
+    if(!s) b.statements.push(x);
+    await save(); toast('Statement saved');
+  }});
+}
+function debtTxnModal(bid,tid,preset={}){
+  const b=book(bid), x=tid?b.txns.find(t=>t.id===tid):null, cur=b.currency||'QAR', type=x?.type||preset.type||'payment';
+  modal({title:`${x?'Edit':'Record'} ${TXN_LABEL[type].toLowerCase()} — ${esc(b.name)}`,body:`<div class="form">
+    <div><label>Type</label><select name="type">${['payment','charge','fee'].map(t=>`<option value="${t}" ${t===type?'selected':''}>${TXN_LABEL[t]}</option>`).join('')}</select></div>
+    <div><label>Date *</label><input type="date" name="date" value="${x?.date||today()}"></div>
+    <div><label>Amount (${cur}) *</label><input type="number" step="0.01" min="0" name="amount" value="${x?.amount??(preset.amount&&+preset.amount>0?(+preset.amount).toFixed(2):'')}"></div>
+    <div><label>Method</label><select name="method">${opts(METHODS,x?.method||'Bank Transfer')}</select></div>
+    <div><label>Reference</label><input type="text" name="ref" value="${esc(x?.ref||'')}"></div>
+    <div><label>Note</label><input type="text" name="note" value="${esc(x?.note||'')}" placeholder="e.g. 500 + minimum"></div>
+    ${filesField(x?.files,'Receipt / slip')}
+  </div>`,
+  onOpen:wireFiles,
+  async onSubmit(f){
+    const amount=+val(f,'amount'), date=val(f,'date');
+    if(!date||!(amount>0)){ toast('Enter a date and an amount above 0'); return false; }
+    const t=x||{id:uid(),files:[]}; Object.assign(t,{type:val(f,'type'),date,amount,method:val(f,'method'),ref:val(f,'ref'),note:val(f,'note')});
+    t.files=await applyFiles(f,t.files,{bookId:b.id,txnId:t.id,docType:'Receipt',note:`${TXN_LABEL[t.type]} — ${fmtDate(date)}`});
+    if(!x) b.txns.push(t);
+    await save(); toast(`${TXN_LABEL[t.type]} saved`);
+  }});
+}
+
 function renderExpense(b){
   const m=V.month, k=expCalc(b,m), cur=k.cur;
   if(!['budget','txns','trend','docs'].includes(V.tab)) V.tab='budget';
@@ -1214,6 +1433,7 @@ function linkLabel(f){
   if(b.type==='course'){ const it=b.items.find(i=>i.id===f.itemId); return it?it.title:'Course document'; }
   const x=(b.txns||[]).find(t=>t.id===f.txnId);
   if(b.type==='expense'){ if(!x) return 'Budget document'; const l=b.lines.find(l=>l.id===x.lineId); return `${l?l.name:'Unplanned'} · ${fmtDate(x.date)}`; }
+  if(b.type==='debt'){ const s=(b.statements||[]).find(z=>z.id===f.stmtId); if(s) return `Statement ${fmtDate(s.date)}`; return x?`${TXN_LABEL[x.type]} · ${fmtDate(x.date)}`:'Card document'; }
   return x?`${TXN_LABEL[x.type]} · ${fmtDate(x.date)}`:'Plan document';
 }
 function docTable(files,showBook){
@@ -1365,7 +1585,7 @@ function sectionModal(sid){
   onOpen(f){
     f.querySelectorAll('[data-icon]').forEach(c=>c.onclick=()=>{ f.elements.icon.value=c.dataset.icon; });
     const kindNow=()=>n?kind0:(f.querySelector('[name=kind]:checked')?.value||'course');
-    const toggle=()=>{ f.querySelector('#cats-wrap').hidden = kindNow()==='saving';
+    const toggle=()=>{ f.querySelector('#cats-wrap').hidden = ['saving','debt'].includes(kindNow());
       const ta=f.elements.cats; if(!s && !ta.dataset.touched) ta.value=(kindNow()==='course'?['Installment','Fee','Interest','Penalty','Other']:kindNow()==='expense'?EXP_CATS:[]).join('\n'); };
     f.elements.cats.addEventListener('input',()=>f.elements.cats.dataset.touched=1);
     f.querySelectorAll('[name=kind]').forEach(r=>r.addEventListener('change',toggle)); toggle();
@@ -1386,7 +1606,7 @@ function sectionModal(sid){
     const name=val(f,'name'); if(!name){ toast('Section name is required'); return false; }
     const kind=n?kind0:(f.querySelector('[name=kind]:checked')?.value||'course');
     const cats=f.elements.cats.value.split('\n').map(x=>x.trim()).filter(Boolean);
-    const d={name,icon:val(f,'icon')||KINDS[kind].icon,itemName:val(f,'itemName')||(kind==='saving'?'saving plan':kind==='expense'?'budget':'item'),kind,cats:kind==='saving'?undefined:cats};
+    const d={name,icon:val(f,'icon')||KINDS[kind].icon,itemName:val(f,'itemName')||(kind==='debt'?'card or loan':kind==='saving'?'saving plan':kind==='expense'?'budget':'item'),kind,cats:['saving','debt'].includes(kind)?undefined:cats};
     if(s) Object.assign(s,d); else S.sections.push({id:uid(),...d});
     await save(); toast(s?'Section saved':`Section "${name}" created — now add your first ${d.itemName}`);
   }});
@@ -1418,6 +1638,21 @@ function bookModal(sid,id){
     <div><label>Contribution day of month</label><input type="number" min="1" max="31" name="day" value="${b?.day||8}"></div>
     <div><label>Plan start date</label><input type="date" name="startDate" value="${b?.startDate||today()}"></div>
     <div><label>&nbsp;</label><div class="calc-box" id="sav-calc"></div></div>`;
+  if(type==='debt') fields=`
+    <div class="full"><label>${esc(cap(noun))} name *</label><input type="text" name="name" value="${esc(b?.name||'')}" placeholder="e.g. Visa credit card, Car loan"></div>
+    <div><label>Bank</label><input type="text" name="institution" value="${esc(b?.institution||'')}"></div>
+    <div><label>Card / account (last digits)</label><input type="text" name="cardRef" value="${esc(b?.cardRef||'')}" placeholder="•••• 1234"></div>
+    <div><label>Currency</label><select name="currency">${opts(CURRENCIES,b?.currency||'QAR')}</select></div>
+    <div><label>Credit limit</label><input type="number" step="0.01" min="0" name="limit" value="${b?.limit??''}"></div>
+    <div><label>Interest % per month</label><input type="number" step="0.01" min="0" name="interestPct" value="${b?.interestPct??1}"></div>
+    <div><label>Insurance / other % per month</label><input type="number" step="0.01" min="0" name="insurancePct" value="${b?.insurancePct??0}"></div>
+    <div><label>Minimum payment % of statement</label><input type="number" step="0.01" min="0" name="minPct" value="${b?.minPct??3}"></div>
+    <div><label>Statement day / due day (next month)</label><div style="display:flex;gap:6px"><input type="number" min="1" max="31" name="statementDay" value="${b?.statementDay||19}"><input type="number" min="1" max="31" name="dueDay" value="${b?.dueDay||4}"></div></div>
+    <div><label>Your repayment plan</label><select name="planMode">${Object.entries(DEBT_MODES).map(([k,l])=>`<option value="${k}" ${(b?.planMode||'fixed+min')===k?'selected':''}>${l}</option>`).join('')}</select></div>
+    <div><label>Plan amount per month</label><input type="number" step="0.01" min="0" name="planAmount" value="${b?.planAmount??500}"></div>
+    <div><label>Expected new spending per month</label><input type="number" step="0.01" min="0" name="monthlySpend" value="${b?.monthlySpend??0}"></div>
+    <div><label>Auto-debit (note)</label><input type="text" name="autoDebit" value="${esc(b?.autoDebit||'')}" placeholder="e.g. minimum from my salary account"></div>
+    ${b?'':'<div><label>Balance now (if you have no statement yet)</label><input type="number" step="0.01" min="0" name="startBalance" value=""></div>'}`;
   if(type==='expense') fields=`
     <div class="full"><label>${esc(cap(noun))} name *</label><input type="text" name="name" value="${esc(b?.name||'')}" placeholder="e.g. Personal, Home"></div>
     <div><label>Currency</label><select name="currency">${opts(CURRENCIES,b?.currency||'LKR')}</select></div>
@@ -1445,10 +1680,12 @@ function bookModal(sid,id){
     if(type==='course') Object.assign(d,{institution:val(f,'institution'),studentId:val(f,'studentId'),startDate:val(f,'startDate'),endDate:val(f,'endDate')});
     if(type==='saving') Object.assign(d,{mode:val(f,'mode'),members:+val(f,'members')||0,payoutMonth:val(f,'payoutMonth'),payoutAmount:+val(f,'payoutAmount')||0,institution:val(f,'institution'),currency:val(f,'currency'),target:+val(f,'target')||0,targetDate:val(f,'targetDate'),monthly:+val(f,'monthly')||0,day:Math.min(31,Math.max(1,+val(f,'day')||1)),startDate:val(f,'startDate')||today()});
     if(type==='expense') Object.assign(d,{currency:val(f,'currency'),income:+val(f,'income')||0});
+    if(type==='debt'){ const g=n=>+val(f,n)||0; Object.assign(d,{institution:val(f,'institution'),cardRef:val(f,'cardRef'),currency:val(f,'currency'),limit:g('limit'),interestPct:g('interestPct'),insurancePct:g('insurancePct'),minPct:g('minPct'),statementDay:Math.min(31,Math.max(1,g('statementDay')||19)),dueDay:Math.min(31,Math.max(1,g('dueDay')||4)),planMode:val(f,'planMode'),planAmount:g('planAmount'),monthlySpend:g('monthlySpend'),autoDebit:val(f,'autoDebit')});
+      if(!b){ d.startBalance=g('startBalance'); d.startDate=today(); } }
     if(b) Object.assign(b,d);
     else {
       const nb={id:uid(),type,sectionId:s.id,created:new Date().toISOString(),...d};
-      if(type==='course') nb.items=[]; if(type==='saving') nb.txns=[]; if(type==='expense'){ nb.lines=[]; nb.txns=[]; }
+      if(type==='course') nb.items=[]; if(type==='saving') nb.txns=[]; if(type==='expense'){ nb.lines=[]; nb.txns=[]; } if(type==='debt'){ nb.statements=[]; nb.txns=[]; }
       S.books.push(nb); V.page='book'; V.bookId=nb.id; V.tab=null;
     }
     await save(); toast(b?'Saved':`${cap(noun)} created`);
@@ -1682,6 +1919,7 @@ async function deleteFileRaw(id){
   for(const b of S.books){
     for(const it of b.items||[]){ if(it.invoiceFiles) it.invoiceFiles=strip(it.invoiceFiles); for(const p of it.payments) p.files=strip(p.files); }
     for(const t of b.txns||[]) t.files=strip(t.files);
+    for(const s of b.statements||[]) s.files=strip(s.files);
   }
 }
 let pendingDrop=null;
@@ -1816,6 +2054,11 @@ const A = {
   'line-modal':d=>{ lineModal(d.b,d.l); return false; },
   'move-line':d=>{ moveLineModal(d.b,d.l); return false; },
   'exp-setup':d=>{ setupModal(d.b); return false; },
+  'debt-txn':d=>{ debtTxnModal(d.b,d.t,{type:d.type,amount:d.amount}); return false; },
+  'debt-stmt':d=>{ debtStmtModal(d.b,d.s); return false; },
+  async 'del-stmt'(d){ const b=book(d.b), s=b.statements.find(x=>x.id===d.s);
+    if(!(await askConfirm(`Delete the ${fmtDate(s.date)} statement (closing ${fmt(s.closing,b.currency||'QAR')})?${(s.files||[]).length?'\nIts attached PDF will also be deleted.':''}`,{title:'Delete statement?'}))) return false;
+    for(const id of s.files||[]) await deleteFileRaw(id); b.statements=b.statements.filter(x=>x!==s); await save(); toast('Statement deleted'); },
   'view-file':d=>{ viewFile(d.f); return false; },
   'dl-file':d=>{ downloadFile(d.f); return false; },
   'csv-course':d=>{ csvCourse(book(d.b)); return false; },
