@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003162622">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003162622">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003162622">
+<link rel="manifest" href="manifest.webmanifest?v=20261003162931">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003162931">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003162931">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1537,16 +1537,32 @@ function lineHistoryModal(bid,lid){
   }).reverse();
   modal({title:`📜 ${esc(l.name)} — history`,submit:'',wide:true,body:`
     <div class="sub" style="margin-bottom:10px">${esc(b.name)} · ${esc(l.category||'')}${l.isBill?' · bill due on the '+ordinal(+l.dueDay||1):''}${l.notes?' · '+esc(l.notes):''} · ${ymLabel(start)} → ${l.endMonth?ymLabel(l.endMonth):'now'}</div>
+    ${(()=>{ const docs=S.files.filter(fl=>fl.bookId===b.id&&fl.lineId===l.id&&!fl.txnId); return docs.length?`<div style="margin-bottom:10px"><span class="sub">Bills not linked to a payment yet:</span> ${docs.map(d=>fileChip(d.id)).join('')}</div>`:''; })()}
     <div class="grid kpis" style="margin-bottom:12px">
       <div class="card kpi"><div class="l">Months</div><div class="v">${months.length}</div></div>
       <div class="card kpi"><div class="l">Total due</div><div class="v">${F(totDue)}</div></div>
       <div class="card kpi ${totPaid>=totDue-0.005?'ok':'warn'}"><div class="l">Total paid</div><div class="v">${F(totPaid)}</div><div class="s">${totPaid>=totDue-0.005?'All paid ✅':'Still due '+F(totDue-totPaid)}</div></div>
     </div>
     <div class="tbl-wrap" style="max-height:55vh"><table><thead><tr><th>Month</th><th class="num">Amount due</th><th>Change</th>${l.carry?'<th class="num">Carried in</th>':''}<th class="num">Paid</th><th>Paid on · receipts</th><th>Status</th><th></th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-    <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it, <b>📎</b> to attach a receipt photo or PDF, or a receipt to view it. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
-  extraFoot:`<button type="button" class="btn" id="lh-edit">✏️ Edit line</button>`,
+    <div class="hint">Newest month first. Change a month's <b>amount due</b> right here (e.g. when the rent changes) — other months stay as they are. Click a payment to edit or delete it, <b>📎</b> to attach a receipt photo or PDF, or a receipt to view it. <b>📎 Attach bills</b> (bottom) takes many files at once and matches each to its payment by the reference number in the file name. To continue the line into later months, edit it (✏️) and clear or change the “Until” month.</div>`,
+  extraFoot:`<button type="button" class="btn" id="lh-edit">✏️ Edit line</button><label class="btn" title="Pick several bills/receipts — each is matched to its payment by the reference number in the file name">📎 Attach bills<input type="file" id="lh-bulk" hidden multiple accept="application/pdf,image/*"></label>`,
   onOpen(f){
     f.querySelector('#lh-edit').onclick=()=>lineModal(bid,lid);
+    document.getElementById('lh-bulk').onchange=async e=>{
+      const files=[...e.target.files]; if(!files.length) return;
+      let matched=0, kept=0, skipped=0;
+      for(const file of files){
+        const base=file.name.replace(/\.[^.]+$/,'').toLowerCase();
+        const t=b.txns.find(x=>x.lineId===l.id && x.ref && (base.includes(x.ref.toLowerCase())||x.ref.toLowerCase().includes(base)));
+        const dup=S.files.some(fl=>fl.bookId===b.id && fl.name===file.name && (t?fl.txnId===t.id:fl.lineId===l.id));
+        if(dup){ skipped++; continue; }
+        if(t){ const ids=await addFiles([file],{bookId:b.id,txnId:t.id,docType:'Bill',note:`${l.name} — bill ${t.ref}`}); t.files=(t.files||[]).concat(ids); matched++; }
+        else { await addFiles([file],{bookId:b.id,lineId:l.id,docType:'Bill',note:`${l.name} — bill ${file.name.replace(/\.[^.]+$/,'')}`}); kept++; }
+      }
+      await save();
+      toast(`📎 ${matched} attached to their payments${kept?`, ${kept} kept as line documents`:''}${skipped?`, ${skipped} already attached`:''}`);
+      lineHistoryModal(bid,lid); render();
+    };
     f.querySelectorAll('[data-up]').forEach(inp=>inp.addEventListener('change',async()=>{
       const t=b.txns.find(x=>x.id===inp.dataset.up); if(!t||!inp.files.length) return;
       const ids=await addFiles(inp.files,{bookId:b.id,txnId:t.id,docType:l.isBill?'Bill':'Receipt',note:`${l.name} — ${fmtDate(t.date)}`});
@@ -1605,7 +1621,7 @@ function linkLabel(f){
   const b=book(f.bookId); if(!b) return '—';
   if(b.type==='course'){ const it=b.items.find(i=>i.id===f.itemId); return it?it.title:'Course document'; }
   const x=(b.txns||[]).find(t=>t.id===f.txnId);
-  if(b.type==='expense'){ if(!x) return 'Budget document'; const l=b.lines.find(l=>l.id===x.lineId); return `${l?l.name:'Unplanned'} · ${fmtDate(x.date)}`; }
+  if(b.type==='expense'){ if(!x){ const ln=(b.lines||[]).find(l=>l.id===f.lineId); return ln?`${ln.name} — bill (no payment yet)`:'Budget document'; } const l=b.lines.find(l=>l.id===x.lineId); return `${l?l.name:'Unplanned'} · ${fmtDate(x.date)}`; }
   if(b.type==='debt'){ const s=(b.statements||[]).find(z=>z.id===f.stmtId); if(s) return `Statement ${fmtDate(s.date)}`; return x?`${TXN_LABEL[x.type]} · ${fmtDate(x.date)}`:'Card document'; }
   return x?`${TXN_LABEL[x.type]} · ${fmtDate(x.date)}`:'Plan document';
 }
