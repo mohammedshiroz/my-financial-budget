@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003145111">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003145111">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003145111">
+<link rel="manifest" href="manifest.webmanifest?v=20261003145234">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003145234">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003145234">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -203,6 +203,7 @@ tr.row.open td{background:var(--accent-weak)}
 .cur-switch{display:inline-flex;gap:4px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;flex-wrap:wrap}
 .cur-switch button{border:0;background:transparent;padding:7px 14px;border-radius:9px;cursor:pointer;font-weight:600;color:var(--muted)}
 .cur-switch button:hover{background:var(--panel2);color:var(--text)}
+.cur-switch .cs-cur{font-size:11px;opacity:.7;font-weight:700;margin-left:2px}
 .cur-switch button.on{background:var(--accent);color:#fff;box-shadow:0 3px 10px rgba(79,107,237,.3)}
 .month-nav .month-pick{width:auto;font-weight:700;text-align:center;padding:5px 8px}
 .overlay{position:fixed;inset:0;background:rgba(10,15,30,.45);display:grid;place-items:center;padding:16px;z-index:50}
@@ -416,11 +417,18 @@ function fmt(n,cur='LKR',dec){
   n=+n||0; const d = dec ?? (Math.round(n)===n?0:2);
   return (n<0?'-':'')+(CUR_SYM[cur]??cur+' ')+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
 }
-const DASH = {active:false, cur:'ALL'};
-const homeCur = b => b.type==='course' ? (b.currency||'LKR') : (b.currency||'LKR');
-const dashOK = b => !DASH.active || DASH.cur==='ALL' || homeCur(b)===DASH.cur;
+/* country-wise dashboard: every item belongs to a country (default from its currency); a country view shows that
+   country's items in that country's currency (other currencies converted) */
+const COUNTRIES = {
+  LK:{name:'Sri Lanka',flag:'🇱🇰',cur:'LKR'}, QA:{name:'Qatar',flag:'🇶🇦',cur:'QAR'}, GB:{name:'United Kingdom',flag:'🇬🇧',cur:'GBP'},
+  US:{name:'United States',flag:'🇺🇸',cur:'USD'}, IN:{name:'India',flag:'🇮🇳',cur:'INR'}, AU:{name:'Australia',flag:'🇦🇺',cur:'AUD'},
+  CA:{name:'Canada',flag:'🇨🇦',cur:'CAD'}, EU:{name:'Europe',flag:'🇪🇺',cur:'EUR'} };
+const CUR_COUNTRY = {LKR:'LK',QAR:'QA',GBP:'GB',USD:'US',INR:'IN',AUD:'AU',CAD:'CA',EUR:'EU'};
+const countryOf = b => (b.country && COUNTRIES[b.country]) ? b.country : (CUR_COUNTRY[b.type==='course'?'LKR':(b.currency||'LKR')]||'LK');
+const DASH = {active:false, cur:'ALL', country:'ALL'};
+const dashOK = b => !DASH.active || DASH.country==='ALL' || countryOf(b)===DASH.country;
 const fmtLKR = n => (DASH.active && DASH.cur!=='ALL' && DASH.cur!=='LKR') ? fmt(Math.round(n/rate(DASH.cur)*100)/100, DASH.cur) : fmt(Math.round(n),'LKR',0);
-const CUR_VIEW = {LKR:'🇱🇰 Sri Lanka · Rs', QAR:'🇶🇦 Qatar · QAR', GBP:'🇬🇧 UK · £', USD:'🇺🇸 USD', EUR:'🇪🇺 EUR', AUD:'🇦🇺 AUD', CAD:'🇨🇦 CAD', INR:'🇮🇳 INR'};
+const countryLabel = c => `${COUNTRIES[c].flag} ${COUNTRIES[c].name}`;
 const fmtSize = b => b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
 const ordinal = n => n+(['th','st','nd','rd'][(n%100>10&&n%100<14)?0:(n%10<4?n%10:0)]||'th');
 const opts = (arr,sel) => arr.map(v=>`<option ${v===sel?'selected':''}>${esc(v)}</option>`).join('');
@@ -834,11 +842,11 @@ function sectionNeed(s,now){
 const NEED_WORD = {course:'due',saving:'to put aside',expense:'still to spend',debt:'to pay'};
 
 function renderDashboard(){
-  const views=[...new Set(S.books.map(homeCur))].sort((a,b)=>(b==='LKR')-(a==='LKR')||a.localeCompare(b));
-  let cur=UI.dashCur||views[0]||'ALL'; if(cur!=='ALL'&&!views.includes(cur)) cur=views[0]||'ALL';
-  DASH.active=true; DASH.cur=cur;
+  const views=[...new Set(S.books.map(countryOf))].sort((a,b)=>(b==='LK')-(a==='LK')||COUNTRIES[a].name.localeCompare(COUNTRIES[b].name));
+  let cur=UI.dashCountry||views[0]||'ALL'; if(cur!=='ALL'&&!views.includes(cur)) cur=views[0]||'ALL';
+  DASH.active=true; DASH.country=cur; DASH.cur=cur==='ALL'?'ALL':COUNTRIES[cur].cur;
   try{
-    const sel=views.length>1?`<div class="cur-switch no-print">${views.map(c=>`<button class="${cur===c?'on':''}" data-act="dash-cur" data-cur="${c}">${CUR_VIEW[c]||c}</button>`).join('')}<button class="${cur==='ALL'?'on':''}" data-act="dash-cur" data-cur="ALL">🌍 All (in Rs)</button></div>`:'';
+    const sel=views.length>1?`<div class="cur-switch no-print">${views.map(c=>`<button class="${cur===c?'on':''}" data-act="dash-cur" data-cur="${c}">${countryLabel(c)} <span class="cs-cur">${COUNTRIES[c].cur}</span></button>`).join('')}<button class="${cur==='ALL'?'on':''}" data-act="dash-cur" data-cur="ALL">🌍 All <span class="cs-cur">in Rs</span></button></div>`:'';
     return sel+renderDashboardView();
   } finally { DASH.active=false; }
 }
@@ -866,7 +874,7 @@ function renderDashboardView(){
     <div class="num"><b>${a.amt}</b>${a.lkr!=null&&(DASH.cur==='ALL'||DASH.cur==='LKR')?`<div class="sub">≈ ${fmtLKR(a.lkr)}</div>`:''}</div>${a.btn}</div>`; };
 
   return `
-  <div class="top"><div><h1>Dashboard</h1><div class="sub">${fmtDate(t)} · ${S.sections.map(s=>`${booksIn(s.id).length} in ${esc(s.name)}`).join(' · ')} · ${DASH.cur==='ALL'?`all amounts converted to Rs${foreign.length?` (${foreign.map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:DASH.cur==='LKR'?`amounts in Rs${foreign.filter(c=>c!=='QAR').length?` (${foreign.filter(c=>c!=='QAR').map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:`amounts in ${DASH.cur}`}</div></div>
+  <div class="top"><div><h1>Dashboard${DASH.country!=='ALL'?` <span class="tag" style="font-size:13px;vertical-align:middle">${countryLabel(DASH.country)}</span>`:''}</h1><div class="sub">${fmtDate(t)} · ${S.sections.map(s=>`${booksIn(s.id).length} in ${esc(s.name)}`).join(' · ')} · ${DASH.cur==='ALL'?`all amounts converted to Rs${foreign.length?` (${foreign.map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:DASH.cur==='LKR'?`amounts in Rs${foreign.filter(c=>c!=='QAR').length?` (${foreign.filter(c=>c!=='QAR').map(c=>`1 ${c} = Rs ${rate(c)}`).join(', ')})`:''}`:`amounts in ${DASH.cur}`}</div></div>
     <div class="toolbar no-print" style="margin:0"><button class="btn" data-act="section-modal">➕ Add section</button><button class="btn" onclick="print()">🖨 Print</button></div></div>
   ${DB.memory?`<div class="banner bad">⚠️ Temporary mode — this browser can't keep data. Save your changes to the OneDrive data file before closing: <button class="btn sm" data-act="sync-save">💾 Save data file</button></div>`:''}
   ${backupDays===null||backupDays>14?`<div class="banner no-print">💾 ${backupDays===null?'You have not exported a backup yet.':`Last backup was ${backupDays} days ago.`} Your data lives in this browser only — keep a backup file in your OneDrive folder. <button class="btn sm" data-act="export">Export backup now</button></div>`:''}
@@ -997,7 +1005,7 @@ function flowChart(){
 
 /* ================= BOOK HEADER (shared) ================= */
 function bookHeader(b,sub){
-  return `<div class="top"><div><h1>${dot(b.color,14)} ${esc(b.name)} <span class="tag">${secOf(b).icon} ${esc(secOf(b).name)}</span></h1><div class="sub">${sub}</div></div>
+  return `<div class="top"><div><h1>${dot(b.color,14)} ${esc(b.name)} <span class="tag">${secOf(b).icon} ${esc(secOf(b).name)}</span> <span class="tag">${countryLabel(countryOf(b))}</span></h1><div class="sub">${sub}</div></div>
     <div class="toolbar" style="margin:0"><button class="btn" data-act="book-modal" data-b="${b.id}" data-type="${b.type}">✏️ Edit</button><button class="btn danger" data-act="del-book" data-b="${b.id}">🗑 Delete</button></div></div>`;
 }
 const tabsHtml = list => `<div class="tabs">${list.map(([id,l])=>`<a class="${V.tab===id?'active':''}" data-act="tab" data-tab="${id}">${l}</a>`).join('')}</div>`;
@@ -1760,7 +1768,8 @@ function sectionModal(sid){
 function bookModal(sid,id){
   const b=id?book(id):null, s=b?secOf(b):sec(sid); if(!s) return;
   const type=s.kind, noun=s.itemName||'item';
-  const colorPick=`<div class="full"><label>Colour</label><div>${COLORS.map(col=>`<label style="display:inline-block;margin-right:8px;cursor:pointer"><input type="radio" name="color" value="${col}" ${(b?.color||COLORS[S.books.length%COLORS.length])===col?'checked':''}> ${dot(col,16)}</label>`).join('')}</div></div>`;
+  const countryPick=`<div><label>Country</label><select name="country"><option value="">Automatic (from currency)</option>${Object.entries(COUNTRIES).map(([k,c])=>`<option value="${k}" ${b?.country===k?'selected':''}>${c.flag} ${c.name}</option>`).join('')}</select><div class="hint">Which dashboard view it belongs to.</div></div>`;
+  const colorPick=countryPick+`<div class="full"><label>Colour</label><div>${COLORS.map(col=>`<label style="display:inline-block;margin-right:8px;cursor:pointer"><input type="radio" name="color" value="${col}" ${(b?.color||COLORS[S.books.length%COLORS.length])===col?'checked':''}> ${dot(col,16)}</label>`).join('')}</div></div>`;
   let fields='';
   if(type==='course') fields=`
     <div class="full"><label>${esc(cap(noun))} name *</label><input type="text" name="name" value="${esc(b?.name||'')}"></div>
@@ -1820,7 +1829,7 @@ function bookModal(sid,id){
     f.addEventListener('input',u); u();
   },
   async onSubmit(f){
-    const d={name:val(f,'name'),color:f.elements.color.value,notes:f.elements.notes.value};
+    const d={name:val(f,'name'),color:f.elements.color.value,notes:f.elements.notes.value,country:val(f,'country')};
     if(!d.name){ toast('Name is required'); return false; }
     if(type==='course') Object.assign(d,{institution:val(f,'institution'),studentId:val(f,'studentId'),startDate:val(f,'startDate'),endDate:val(f,'endDate')});
     if(type==='saving') Object.assign(d,{mode:val(f,'mode'),members:+val(f,'members')||0,payoutMonth:val(f,'payoutMonth'),payoutAmount:+val(f,'payoutAmount')||0,institution:val(f,'institution'),currency:val(f,'currency'),target:+val(f,'target')||0,targetDate:val(f,'targetDate'),monthly:+val(f,'monthly')||0,day:Math.min(31,Math.max(1,+val(f,'day')||1)),startDate:val(f,'startDate')||today()});
@@ -2157,7 +2166,7 @@ const A = {
   toggle:d=>{ V.open.has(d.i)?V.open.delete(d.i):V.open.add(d.i); },
   month:d=>{ V.month = +d.d===0 ? ymNow() : ymAdd(V.month,+d.d); },
   'line-history':d=>{ lineHistoryModal(d.b,d.l); return false; },
-  'dash-cur':d=>{ UI.dashCur=d.cur; saveUI(); },
+  'dash-cur':d=>{ UI.dashCountry=d.cur; saveUI(); },
   'goto-month':d=>{ V.month=d.ym; V.tab='budget'; scrollTo({top:0}); },
   'book-modal':d=>{ bookModal(d.s,d.b); return false; },
   'section-modal':d=>{ sectionModal(d.s); return false; },
