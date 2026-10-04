@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261003190346">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261003190346">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261003190346">
+<link rel="manifest" href="manifest.webmanifest?v=20261004052117">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261004052117">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261004052117">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -167,6 +167,22 @@ tr.row.open td{background:var(--accent-weak)}
 .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
 .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-tracked{background:var(--info-weak);color:var(--info)}
+.daily-add h2{margin-top:0}
+.daily-top{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.daily-top label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:600;color:var(--muted)}
+.daily-rows{display:grid;gap:8px}
+.daily-row{display:grid;grid-template-columns:110px 170px 1fr auto;grid-template-areas:"n a t b";gap:8px;align-items:center}
+.daily-row > b{grid-area:n} .daily-row [data-daily-amt]{grid-area:a;min-width:0} .daily-row [data-daily-note]{grid-area:t;min-width:0} .daily-row .btn{grid-area:b}
+@media(max-width:620px){ .daily-row{grid-template-columns:1fr auto;grid-template-areas:"n n" "a b" "t t"} }
+.daily-entry{display:block;cursor:pointer;color:inherit;text-decoration:none;white-space:nowrap;padding:1px 0}
+.daily-entry:hover{color:var(--accent)}
+.daily-entry .sub{white-space:normal}
+.daily-plus{font-size:13px;padding:0 6px;opacity:.55}
+.daily-plus:hover{opacity:1}
+.daily-table td{padding:7px 10px}
+.daily-table tr.daily-today td{background:var(--accent-weak)}
+.daily-table tr.daily-none td{color:var(--muted)}
 .b-paid,.b-ok{background:var(--ok-weak);color:var(--ok)} .b-overdue,.b-over{background:var(--bad-weak);color:var(--bad)}
 .b-due-soon{background:var(--warn-weak);color:var(--warn)} .b-partial{background:var(--info-weak);color:var(--info)}
 .b-upcoming,.b-unused{background:var(--gray-weak);color:var(--muted)} .b-waived{background:var(--gray-weak);color:var(--muted)}
@@ -376,7 +392,7 @@ const LABELS = {
   course:{paid:'Paid',partial:'Partially paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'Waived'},
   saving:{paid:'Saved',partial:'Partly saved',overdue:'Missed','due-soon':'Due soon',upcoming:'Planned',waived:'Target reached'},
   bill:{carried:'Carried to next bill',paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Pending',waived:'—'},
-  budget:{ok:'Within budget',over:'Over budget',unused:'Nothing spent'},
+  budget:{ok:'Within budget',over:'Over budget',unused:'Nothing spent',tracked:'Tracking (no limit)'},
 };
 const TXN_LABEL = {deposit:'Deposit',withdrawal:'Withdrawal',interest:'Interest / profit',payout:'Payout received',payment:'Payment',charge:'New spending',fee:'Bank fee'};
 LABELS.debt = {paid:'Paid',partial:'Part paid',overdue:'Overdue','due-soon':'Due soon',upcoming:'Upcoming',none:'No statement yet'};
@@ -756,6 +772,7 @@ function expCalc(b,m){
         const status = owe<=0.005 || (spent>0 && owe<1) ? 'paid' : (m<ymNow() ? 'carried' : dateStatus(false,spent>0,due));   // a few cents left simply roll into the next bill
         return {l,spent,budget,carryIn,remaining:owe,due,status}; }
       return {l,spent,budget,remaining:budget-spent,due,status:dateStatus(budget>0?spent>=budget-0.005:spent>0,spent>0,due)}; }
+    if(l.daily && !budget) return {l,spent,budget,remaining:0,status:spent>0?'tracked':'unused'};
     return {l,spent,budget,remaining:budget-spent,status:spent>budget+0.005?'over':spent>0?'ok':'unused'};
   });
   const unplanned=sum(tx.filter(x=>!ids.has(x.lineId)),x=>+x.amount);
@@ -1491,8 +1508,9 @@ function debtTxnModal(bid,tid,preset={}){
 
 function renderExpense(b){
   const m=V.month, k=expCalc(b,m), cur=k.cur;
-  if(!['budget','txns','trend','docs'].includes(V.tab)) V.tab='budget';
-  const body = V.tab==='txns'?expTxns(b,k) : V.tab==='trend'?expTrend(b) : V.tab==='docs'?bookDocs(b) : expBudget(b,k);
+  const hasDaily=dailyLines(b).length>0;
+  if(!['budget','txns','trend','docs',...(hasDaily?['daily']:[])].includes(V.tab)) V.tab='budget';
+  const body = V.tab==='daily'?expDaily(b,k) : V.tab==='txns'?expTxns(b,k) : V.tab==='trend'?expTrend(b) : V.tab==='docs'?bookDocs(b) : expBudget(b,k);
   return `${bookHeader(b,`Monthly budget${cur!=='LKR'?' · '+cur:''}${b.notes?' · '+esc(b.notes.split('\n')[0].slice(0,80)):''}`)}
   <div class="row-flex" style="margin-bottom:14px"><div class="month-nav"><button class="btn sm" data-act="month" data-d="-1">◀</button><input type="month" class="month-pick" value="${m}" data-monthpick title="Pick a month"><button class="btn sm" data-act="month" data-d="1">▶</button>
     ${m!==ymNow()?`<button class="btn sm" data-act="month" data-d="0">This month</button>`:''}</div>
@@ -1505,7 +1523,7 @@ function renderExpense(b){
     <div class="card kpi warn"><div class="l">Bills</div><div class="v">${k.billsPaid}/${k.bills.length} paid</div><div class="s">${k.billsPendingAmt?`${fmt(k.billsPendingAmt,cur)} still to pay`:k.bills.length?'All bills paid ✅':'No fixed bills set'}</div></div>
     ${k.income?`<div class="card kpi"><div class="l">Income</div><div class="v">${fmt(k.income,cur)}</div><div class="s">Left after spending: <b class="${k.income-k.spent<0?'neg':'pos'}">${fmt(k.income-k.spent,cur)}</b><br>After full budget: ${fmt(k.income-Math.max(k.budget,k.spent),cur)}</div></div>`:''}
   </div>
-  ${tabsHtml([['budget','📋 Budget & bills'],['txns','💳 Transactions'],['trend','📈 Trends'],['docs','📁 Documents']])}
+  ${tabsHtml([['budget','📋 Budget & bills'],...(hasDaily?[['daily','📆 Daily']]:[]),['txns','💳 Transactions'],['trend','📈 Trends'],['docs','📁 Documents']])}
   ${body}`;
 }
 function expBudget(b,k){
@@ -1612,6 +1630,65 @@ function lineHistoryModal(bid,lid){
       await save(); toast(`${ymLabel(m)} amount set to ${F(v)}`); lineHistoryModal(bid,lid); render();
     }));
   }});
+}
+/* ---------- day-by-day tracking for lines marked "Track day by day" (food, travel…) ---------- */
+const dailyLines = b => (b.lines||[]).filter(l=>l.daily);
+const WDAY = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function expDaily(b,k){
+  const cur=k.cur, m=k.m, all=dailyLines(b), lines=all.filter(l=>lineActive(l,m)), t=today();
+  if(!all.length) return `<div class="card empty">No budget lines are tracked day by day yet.<br>Edit a line (✏️ on the Budget tab) and tick <b>Track day by day</b> — e.g. Food, Travel, Coffee.</div>`;
+  if(!lines.length) return `<div class="card empty">Day-by-day tracking (${all.map(l=>esc(l.name)).join(', ')}) starts in ${ymLabel(all.map(l=>l.startMonth||m).sort()[0])}. Use ◀ ▶ at the top to change month.</div>`;
+  const dim=+monthDay(m,31).slice(8), isNow=m===ymNow(), past=m<ymNow(), lastDay=isNow?+t.slice(8):past?dim:0, td=+t.slice(8);
+  const ids=new Set(lines.map(l=>l.id)), tx=k.tx.filter(x=>ids.has(x.lineId)).sort((a,c)=>a.date.localeCompare(c.date));
+  const byDay=new Map(); for(const x of tx){ const d=+x.date.slice(8); if(!byDay.has(d)) byDay.set(d,[]); byDay.get(d).push(x); }
+  const dayAmt=(d,lid)=>sum((byDay.get(d)||[]).filter(x=>!lid||x.lineId===lid),x=>+x.amount);
+  const spent=sum(tx,x=>+x.amount), budOf=l=>+(l.overrides?.[m]??l.budget)||0, budget=sum(lines,budOf);
+  const avg=lastDay?spent/lastDay:0, proj=isNow?avg*dim:spent, daysLeft=isNow?dim-td+1:past?0:dim;
+  const per=lines.map((l,i)=>{ const s=sum(tx.filter(x=>x.lineId===l.id),x=>+x.amount), bud=budOf(l);
+    return {l,i,s,bud,today:isNow?dayAmt(td,l.id):0,avg:lastDay?s/lastDay:0,left:bud-s}; });
+  const dateDef=V.dailyDate&&V.dailyDate.slice(0,7)===m ? V.dailyDate : isNow?t:past?monthDay(m,dim):monthDay(m,1);
+
+  const add=`<div class="card daily-add no-print"><h2>➕ Quick add</h2>
+    <div class="daily-top"><label>Date<input type="date" id="daily-date" value="${dateDef}"></label><label>Paid by<select id="daily-method">${opts(METHODS,UI.dailyMethod||'Cash')}</select></label></div>
+    <div class="daily-rows">${lines.map(l=>`<div class="daily-row"><b>${esc(l.name)}</b>
+      <input type="number" step="0.01" min="0" inputmode="decimal" placeholder="Amount (${cur})" data-daily-amt="${l.id}">
+      <input type="text" placeholder="Note (optional) — e.g. lunch, taxi to work" data-daily-note="${l.id}">
+      <button class="btn primary" data-act="daily-add" data-b="${b.id}" data-l="${l.id}">Add</button></div>`).join('')}</div>
+    <div class="hint">Type the amount and press Enter (or Add). Tap any amount in the list below to change or delete it.</div></div>`;
+
+  const kpis=`<div class="grid kpis" style="margin-top:14px">
+    ${isNow?`<div class="card kpi"><div class="l">Today</div><div class="v">${fmt(dayAmt(td),cur)}</div><div class="s">${per.map(p=>`${esc(p.l.name)} ${fmt(p.today,cur)}`).join(' · ')}</div></div>`:''}
+    <div class="card kpi"><div class="l">${isNow?'This month so far':ymLabel(m)}</div><div class="v">${fmt(spent,cur)}</div><div class="s">${per.map(p=>`${esc(p.l.name)} ${fmt(p.s,cur)}`).join(' · ')} · ${tx.length} entr${tx.length===1?'y':'ies'}</div></div>
+    <div class="card kpi"><div class="l">Average per day</div><div class="v">${fmt(Math.round(avg*100)/100,cur)}</div><div class="s">${lastDay?`over ${lastDay} day(s)`:'month not started yet'}</div></div>
+    ${isNow?`<div class="card kpi"><div class="l">Month-end estimate</div><div class="v">${fmt(Math.round(proj),cur)}</div><div class="s">if you keep spending ${fmt(Math.round(avg*100)/100,cur)} a day</div></div>`:''}
+    ${budget?`<div class="card kpi ${spent>budget?'bad':'ok'}"><div class="l">${spent>budget?'Over budget':'Left to spend'}</div><div class="v">${fmt(Math.abs(budget-spent),cur)}</div><div class="s">of ${fmt(budget,cur)}${daysLeft&&budget>spent?` · about ${fmt(Math.round((budget-spent)/daysLeft*100)/100,cur)} a day for ${daysLeft} day(s)`:''}</div></div>`
+      :`<div class="card kpi"><div class="l">Monthly limit</div><div class="v muted">Not set</div><div class="s">Edit ${per.map(p=>esc(p.l.name)).join(' / ')} on the Budget tab to add one — then you see what is left per day</div></div>`}
+  </div>`;
+
+  // chart: one stacked bar per day, dashed line = daily average
+  const W=1000,H=190,pl=50,pb=24,pt=10,cw=(W-pl-8)/dim,bw=Math.min(20,cw*.66);
+  const max=Math.max(1,...Array.from({length:dim},(_,i)=>dayAmt(i+1)),avg*1.15), y=v=>pt+(H-pt-pb)*(1-v/max);
+  let svg=`<div class="legend">${lines.map((l,i)=>`<span><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(l.name)}</span>`).join('')}${lastDay?`<span><i style="background:var(--muted)"></i>Average ${fmt(Math.round(avg*100)/100,cur)} / day</span>`:''}</div>
+    <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="min-width:640px" role="img" aria-label="Spending per day">`;
+  [0,.5,1].forEach(f=>{ svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(f*max)}" y2="${y(f*max)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(f*max)+4}" text-anchor="end" font-size="10.5" fill="var(--muted)">${Math.round(f*max)}</text>`; });
+  for(let d=1; d<=dim; d++){ const x=pl+(d-1)*cw+cw/2-bw/2; let acc=0;
+    lines.forEach((l,i)=>{ const v=dayAmt(d,l.id); if(!v) return; svg+=`<rect x="${x}" y="${y(acc+v)}" width="${bw}" height="${y(acc)-y(acc+v)}" fill="${COLORS[i%COLORS.length]}"><title>${d} ${ymLabel(m)} · ${esc(l.name)}: ${fmt(v,cur)}</title></rect>`; acc+=v; });
+    svg+=`<text x="${pl+(d-1)*cw+cw/2}" y="${H-8}" text-anchor="middle" font-size="10" fill="${isNow&&d===td?'var(--accent)':'var(--muted)'}" ${isNow&&d===td?'font-weight="700"':''}>${d}</text>`; }
+  if(lastDay) svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
+  svg+='</svg></div>';
+
+  // day list, newest first
+  let run=0; const cum=[]; for(let d=1; d<=dim; d++){ run+=dayAmt(d); cum[d]=run; }
+  const rows=[]; for(let d=lastDay; d>=1; d--){ const date=monthDay(m,d), wd=WDAY[parse(date).getDay()], tot=dayAmt(d);
+    rows.push(`<tr class="${isNow&&d===td?'daily-today':''}${tot?'':' daily-none'}"><td class="nowrap"><b>${d}</b> ${wd}${isNow&&d===td?' <span class="tag">Today</span>':''}</td>
+      ${lines.map(l=>{ const xs=(byDay.get(d)||[]).filter(x=>x.lineId===l.id);
+        return `<td>${xs.map(x=>`<a class="daily-entry" data-act="exp-txn" data-b="${b.id}" data-t="${x.id}" title="Change or delete">${fmt(x.amount,cur)}${x.note?` <span class="sub">${esc(x.note)}</span>`:''}</a>`).join('')}<button class="icon-btn daily-plus no-print" title="Add ${esc(l.name)} for ${fmtDate(date)}" data-act="exp-txn" data-b="${b.id}" data-l="${l.id}" data-date="${date}">＋</button></td>`; }).join('')}
+      <td class="num">${tot?`<b>${fmt(tot,cur)}</b>`:'—'}</td><td class="num muted">${fmt(cum[d],cur)}</td></tr>`); }
+  const table=`<div class="tbl-wrap" style="margin-top:14px"><table class="daily-table"><thead><tr><th>Day</th>${lines.map(l=>`<th>${esc(l.name)}</th>`).join('')}<th class="num">Day total</th><th class="num">Month so far</th></tr></thead>
+    <tbody>${rows.join('')||`<tr><td colspan="${lines.length+3}" class="empty">${ymLabel(m)} has not started yet.</td></tr>`}</tbody>
+    ${lastDay?`<tfoot><tr><td><b>Total</b></td>${per.map(p=>`<td><b>${fmt(p.s,cur)}</b><div class="sub">${fmt(Math.round(p.avg*100)/100,cur)} a day${p.bud?` · budget ${fmt(p.bud,cur)}`:''}</div></td>`).join('')}<td class="num"><b>${fmt(spent,cur)}</b></td><td></td></tr></tfoot>`:''}</table></div>`;
+
+  return `${lastDay||!past?add:''}${kpis}<div class="card chart" style="margin-top:14px"><h2>Spending per day — ${ymLabel(m)}</h2>${svg}</div>${table}`;
 }
 function expTxns(b,k){
   let tx=[...k.tx].sort((x,y)=>y.date.localeCompare(x.date));
@@ -2542,6 +2619,7 @@ function lineModal(bid,lid){
     <div><label>Category</label><select name="category">${opts(catsFor(b),l?.category||'Other')}</select></div>
     <div><label>Monthly budget (${b.currency||'LKR'})</label><input type="number" step="0.01" min="0" name="budget" value="${l?.budget??''}"></div>
     <div class="full"><label><input type="checkbox" name="isBill" ${l?.isBill?'checked':''}> Fixed bill with a due date (rent, electricity, phone…) — tracks Paid / Overdue each month</label></div>
+    <div class="full"><label><input type="checkbox" name="daily" ${l?.daily?'checked':''}> Track day by day (food, travel, coffee…) — adds a 📆 Daily tab with quick add and daily totals</label></div>
     <div class="full"><label><input type="checkbox" name="carry" ${l?.carry?'checked':''}> Unpaid balance / credit carries over to the next bill (phone, utilities)</label></div>
     <div><label>Bill due day of month</label><input type="number" min="1" max="31" name="dueDay" value="${l?.dueDay||5}"></div>
     <div></div>
@@ -2551,7 +2629,7 @@ function lineModal(bid,lid){
     <div class="full"><label>Notes</label><input type="text" name="notes" value="${esc(l?.notes||'')}"></div>
   </div>`,
   async onSubmit(f){
-    const d={name:val(f,'name'),category:val(f,'category'),budget:+val(f,'budget')||0,isBill:f.elements.isBill.checked,carry:f.elements.carry.checked,dueDay:Math.min(31,Math.max(1,+val(f,'dueDay')||1)),startMonth:val(f,'startMonth'),endMonth:val(f,'endMonth'),notes:val(f,'notes'),overrides:Object.fromEntries(val(f,'overrides').split(',').map(x=>x.split('=').map(s=>s.trim())).filter(([k,v])=>/^\d{4}-\d{2}$/.test(k)&&v!==''&&!isNaN(+v)).map(([k,v])=>[k,+v]))};
+    const d={name:val(f,'name'),category:val(f,'category'),budget:+val(f,'budget')||0,isBill:f.elements.isBill.checked,carry:f.elements.carry.checked,daily:f.elements.daily.checked,dueDay:Math.min(31,Math.max(1,+val(f,'dueDay')||1)),startMonth:val(f,'startMonth'),endMonth:val(f,'endMonth'),notes:val(f,'notes'),overrides:Object.fromEntries(val(f,'overrides').split(',').map(x=>x.split('=').map(s=>s.trim())).filter(([k,v])=>/^\d{4}-\d{2}$/.test(k)&&v!==''&&!isNaN(+v)).map(([k,v])=>[k,+v]))};
     if(!d.name){ toast('Name is required'); return false; }
     if(l) Object.assign(l,d); else b.lines.push({id:uid(),...d});
     await save(); toast('Budget line saved');
@@ -2580,7 +2658,7 @@ function expTxnModal(bid,tid,preset={}){
   const b=book(bid), x=tid?b.txns.find(t=>t.id===tid):null, cur=b.currency||'LKR';
   const ym=preset.ym||V.month||ymNow(), lineId=x?x.lineId:(preset.l||'');
   const line=b.lines.find(l=>l.id===lineId);
-  const defDate = x?.date || (ym===ymNow() ? today() : (line?.isBill ? monthDay(ym,line.dueDay) : monthDay(ym,1)));
+  const defDate = x?.date || preset.date || (ym===ymNow() ? today() : (line?.isBill ? monthDay(ym,line.dueDay) : monthDay(ym,1)));
   const active=b.lines.filter(l=>lineActive(l,ym)||l.id===lineId);
   modal({onDelete:x?()=>A['del-txn']({b:b.id,t:x.id}):null,title:`${x?'Edit':'Add'} expense — ${esc(b.name)}`,body:`<div class="form">
     <div><label>Budget line</label><select name="lineId">${active.map(l=>`<option value="${l.id}" ${l.id===lineId?'selected':''}>${esc(l.name)}${l.isBill?' (bill)':''}</option>`).join('')}<option value="" ${!lineId&&!line?'selected':''}>— Unplanned / other —</option></select></div>
@@ -2752,7 +2830,13 @@ const A = {
   pay:d=>{ payModal(d.b,d.i,d.p); return false; },
   'inv-modal':d=>{ invoiceModal(d.b,d.i); return false; },
   'sav-txn':d=>{ savTxnModal(d.b,d.t,{type:d.type,amount:d.amount,ym:d.ym}); return false; },
-  'exp-txn':d=>{ expTxnModal(d.b,d.t,{l:d.l,amount:d.amount,ym:d.ym}); return false; },
+  'exp-txn':d=>{ expTxnModal(d.b,d.t,{l:d.l,amount:d.amount,ym:d.ym||d.date?.slice(0,7),date:d.date}); return false; },
+  async 'daily-add'(d){ const b=book(d.b), ln=b.lines.find(l=>l.id===d.l), amtEl=document.querySelector(`[data-daily-amt="${d.l}"]`), amount=+(amtEl?.value||0);
+    const date=$('#daily-date')?.value, method=$('#daily-method')?.value||'Cash', note=(document.querySelector(`[data-daily-note="${d.l}"]`)?.value||'').trim();
+    if(!date||!(amount>0)){ toast('Enter an amount above 0'); amtEl?.focus(); return false; }
+    b.txns.push({id:uid(),lineId:d.l,date,amount,method,ref:'',note,files:[]});
+    UI.dailyMethod=method; saveUI(); V.dailyDate=date; V.month=date.slice(0,7); await save();
+    toast(`${ln?ln.name:'Expense'}: ${fmt(amount,b.currency||'LKR')} added for ${fmtDate(date)}`); },
   'line-modal':d=>{ lineModal(d.b,d.l); return false; },
   'move-line':d=>{ moveLineModal(d.b,d.l); return false; },
   'exp-setup':d=>{ setupModal(d.b); return false; },
@@ -2836,6 +2920,11 @@ document.addEventListener('dragover',e=>{ const z=e.target.closest?.('[data-drop
 document.addEventListener('dragleave',e=>{ e.target.closest?.('[data-drop]')?.classList.remove('over'); });
 document.addEventListener('drop',e=>{ const z=e.target.closest?.('[data-drop]'); if(!z) return; e.preventDefault(); z.classList.remove('over'); pendingDrop=e.dataTransfer.files; docModal(z.dataset.drop); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
+document.addEventListener('keydown',e=>{
+  const el=e.target; if(e.key!=='Enter' || !el.matches?.('[data-daily-amt],[data-daily-note]')) return;
+  e.preventDefault(); el.closest('.daily-row')?.querySelector('[data-act="daily-add"]')?.click();
+});
+document.addEventListener('change',e=>{ if(e.target.id==='daily-date' && e.target.value) V.dailyDate=e.target.value; });
 
 /* ================= SECURITY: master password + encryption =================
    A random 256-bit data key (DEK) encrypts the state and every file (AES-GCM).
