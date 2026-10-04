@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#4f6bed">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data: blob:; frame-src blob:; media-src blob:; worker-src 'self'; manifest-src 'self'; connect-src https://login.microsoftonline.com https://graph.microsoft.com https://*.1drv.com https://*.microsoftpersonalcontent.com https://api.onedrive.com https://*.livefilestore.com https://*.sharepoint.com; font-src 'none'; form-action 'none'; base-uri 'none'">
 <title>My Financial Budget</title>
-<link rel="manifest" href="manifest.webmanifest?v=20261004052117">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261004052117">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261004052117">
+<link rel="manifest" href="manifest.webmanifest?v=20261004052639">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png?v=20261004052639">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=20261004052639">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="My Budget">
@@ -1644,6 +1644,7 @@ function expDaily(b,k){
   const dayAmt=(d,lid)=>sum((byDay.get(d)||[]).filter(x=>!lid||x.lineId===lid),x=>+x.amount);
   const spent=sum(tx,x=>+x.amount), budOf=l=>+(l.overrides?.[m]??l.budget)||0, budget=sum(lines,budOf);
   const avg=lastDay?spent/lastDay:0, proj=isNow?avg*dim:spent, daysLeft=isNow?dim-td+1:past?0:dim;
+  const target=budget?budget/dim:0, r2=v=>Math.round(v*100)/100;   // daily target from the fixed monthly amounts
   const per=lines.map((l,i)=>{ const s=sum(tx.filter(x=>x.lineId===l.id),x=>+x.amount), bud=budOf(l);
     return {l,i,s,bud,today:isNow?dayAmt(td,l.id):0,avg:lastDay?s/lastDay:0,left:bud-s}; });
   const dateDef=V.dailyDate&&V.dailyDate.slice(0,7)===m ? V.dailyDate : isNow?t:past?monthDay(m,dim):monthDay(m,1);
@@ -1657,9 +1658,9 @@ function expDaily(b,k){
     <div class="hint">Type the amount and press Enter (or Add). Tap any amount in the list below to change or delete it.</div></div>`;
 
   const kpis=`<div class="grid kpis" style="margin-top:14px">
-    ${isNow?`<div class="card kpi"><div class="l">Today</div><div class="v">${fmt(dayAmt(td),cur)}</div><div class="s">${per.map(p=>`${esc(p.l.name)} ${fmt(p.today,cur)}`).join(' · ')}</div></div>`:''}
+    ${isNow?`<div class="card kpi ${target?(dayAmt(td)>target+0.005?'bad':'ok'):''}"><div class="l">Today</div><div class="v">${fmt(dayAmt(td),cur)}</div><div class="s">${target?`of ${fmt(r2(target),cur)} daily target · ${dayAmt(td)>target+0.005?fmt(r2(dayAmt(td)-target),cur)+' over':fmt(r2(target-dayAmt(td)),cur)+' left today'}<br>`:''}${per.map(p=>`${esc(p.l.name)} ${fmt(p.today,cur)}${p.bud?' / '+fmt(r2(p.bud/dim),cur):''}`).join(' · ')}</div></div>`:''}
     <div class="card kpi"><div class="l">${isNow?'This month so far':ymLabel(m)}</div><div class="v">${fmt(spent,cur)}</div><div class="s">${per.map(p=>`${esc(p.l.name)} ${fmt(p.s,cur)}`).join(' · ')} · ${tx.length} entr${tx.length===1?'y':'ies'}</div></div>
-    <div class="card kpi"><div class="l">Average per day</div><div class="v">${fmt(Math.round(avg*100)/100,cur)}</div><div class="s">${lastDay?`over ${lastDay} day(s)`:'month not started yet'}</div></div>
+    <div class="card kpi ${target&&lastDay?(avg>target+0.005?'bad':'ok'):''}"><div class="l">Average per day</div><div class="v">${fmt(r2(avg),cur)}</div><div class="s">${lastDay?`over ${lastDay} day(s)`:'month not started yet'}${target?` · target ${fmt(r2(target),cur)} a day (${fmt(budget,cur)} ÷ ${dim} days)`:''}</div></div>
     ${isNow?`<div class="card kpi"><div class="l">Month-end estimate</div><div class="v">${fmt(Math.round(proj),cur)}</div><div class="s">if you keep spending ${fmt(Math.round(avg*100)/100,cur)} a day</div></div>`:''}
     ${budget?`<div class="card kpi ${spent>budget?'bad':'ok'}"><div class="l">${spent>budget?'Over budget':'Left to spend'}</div><div class="v">${fmt(Math.abs(budget-spent),cur)}</div><div class="s">of ${fmt(budget,cur)}${daysLeft&&budget>spent?` · about ${fmt(Math.round((budget-spent)/daysLeft*100)/100,cur)} a day for ${daysLeft} day(s)`:''}</div></div>`
       :`<div class="card kpi"><div class="l">Monthly limit</div><div class="v muted">Not set</div><div class="s">Edit ${per.map(p=>esc(p.l.name)).join(' / ')} on the Budget tab to add one — then you see what is left per day</div></div>`}
@@ -1667,7 +1668,7 @@ function expDaily(b,k){
 
   // chart: one stacked bar per day, dashed line = daily average
   const W=1000,H=190,pl=50,pb=24,pt=10,cw=(W-pl-8)/dim,bw=Math.min(20,cw*.66);
-  const max=Math.max(1,...Array.from({length:dim},(_,i)=>dayAmt(i+1)),avg*1.15), y=v=>pt+(H-pt-pb)*(1-v/max);
+  const max=Math.max(1,...Array.from({length:dim},(_,i)=>dayAmt(i+1)),avg*1.15,budget/dim*1.15), y=v=>pt+(H-pt-pb)*(1-v/max);
   let svg=`<div class="legend">${lines.map((l,i)=>`<span><i style="background:${COLORS[i%COLORS.length]}"></i>${esc(l.name)}</span>`).join('')}${lastDay?`<span><i style="background:var(--muted)"></i>Average ${fmt(Math.round(avg*100)/100,cur)} / day</span>`:''}</div>
     <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="min-width:640px" role="img" aria-label="Spending per day">`;
   [0,.5,1].forEach(f=>{ svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(f*max)}" y2="${y(f*max)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(f*max)+4}" text-anchor="end" font-size="10.5" fill="var(--muted)">${Math.round(f*max)}</text>`; });
@@ -1675,6 +1676,7 @@ function expDaily(b,k){
     lines.forEach((l,i)=>{ const v=dayAmt(d,l.id); if(!v) return; svg+=`<rect x="${x}" y="${y(acc+v)}" width="${bw}" height="${y(acc)-y(acc+v)}" fill="${COLORS[i%COLORS.length]}"><title>${d} ${ymLabel(m)} · ${esc(l.name)}: ${fmt(v,cur)}</title></rect>`; acc+=v; });
     svg+=`<text x="${pl+(d-1)*cw+cw/2}" y="${H-8}" text-anchor="middle" font-size="10" fill="${isNow&&d===td?'var(--accent)':'var(--muted)'}" ${isNow&&d===td?'font-weight="700"':''}>${d}</text>`; }
   if(lastDay) svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--muted)" stroke-dasharray="5 4"/>`;
+  if(target) svg+=`<line x1="${pl}" x2="${W-8}" y1="${y(target)}" y2="${y(target)}" stroke="var(--bad)" stroke-width="1.5"/><text x="${W-10}" y="${y(target)-5}" text-anchor="end" font-size="10.5" fill="var(--bad)">Daily target ${fmt(r2(target),cur)}</text>`;
   svg+='</svg></div>';
 
   // day list, newest first
@@ -1683,10 +1685,11 @@ function expDaily(b,k){
     rows.push(`<tr class="${isNow&&d===td?'daily-today':''}${tot?'':' daily-none'}"><td class="nowrap"><b>${d}</b> ${wd}${isNow&&d===td?' <span class="tag">Today</span>':''}</td>
       ${lines.map(l=>{ const xs=(byDay.get(d)||[]).filter(x=>x.lineId===l.id);
         return `<td>${xs.map(x=>`<a class="daily-entry" data-act="exp-txn" data-b="${b.id}" data-t="${x.id}" title="Change or delete">${fmt(x.amount,cur)}${x.note?` <span class="sub">${esc(x.note)}</span>`:''}</a>`).join('')}<button class="icon-btn daily-plus no-print" title="Add ${esc(l.name)} for ${fmtDate(date)}" data-act="exp-txn" data-b="${b.id}" data-l="${l.id}" data-date="${date}">＋</button></td>`; }).join('')}
-      <td class="num">${tot?`<b>${fmt(tot,cur)}</b>`:'—'}</td><td class="num muted">${fmt(cum[d],cur)}</td></tr>`); }
-  const table=`<div class="tbl-wrap" style="margin-top:14px"><table class="daily-table"><thead><tr><th>Day</th>${lines.map(l=>`<th>${esc(l.name)}</th>`).join('')}<th class="num">Day total</th><th class="num">Month so far</th></tr></thead>
+      <td class="num ${target&&tot?(tot>target+0.005?'neg':'pos'):''}">${tot?`<b>${fmt(tot,cur)}</b>`:'—'}${target&&tot?`<div class="sub">${tot>target+0.005?fmt(r2(tot-target),cur)+' over':fmt(r2(target-tot),cur)+' under'}</div>`:''}</td>
+      <td class="num muted">${fmt(cum[d],cur)}${target?`<div class="sub ${cum[d]>target*d+0.005?'neg':''}">target ${fmt(Math.round(target*d),cur)}</div>`:''}</td></tr>`); }
+  const table=`<div class="tbl-wrap" style="margin-top:14px"><table class="daily-table"><thead><tr><th>Day</th>${lines.map(l=>`<th>${esc(l.name)}</th>`).join('')}<th class="num">Day total${target?` <span class="sub">(target ${fmt(r2(target),cur)})</span>`:''}</th><th class="num">Month so far</th></tr></thead>
     <tbody>${rows.join('')||`<tr><td colspan="${lines.length+3}" class="empty">${ymLabel(m)} has not started yet.</td></tr>`}</tbody>
-    ${lastDay?`<tfoot><tr><td><b>Total</b></td>${per.map(p=>`<td><b>${fmt(p.s,cur)}</b><div class="sub">${fmt(Math.round(p.avg*100)/100,cur)} a day${p.bud?` · budget ${fmt(p.bud,cur)}`:''}</div></td>`).join('')}<td class="num"><b>${fmt(spent,cur)}</b></td><td></td></tr></tfoot>`:''}</table></div>`;
+    ${lastDay?`<tfoot><tr><td><b>Total</b></td>${per.map(p=>`<td><b>${fmt(p.s,cur)}</b><div class="sub">${fmt(r2(p.avg),cur)} a day${p.bud?` · budget ${fmt(p.bud,cur)} (${fmt(r2(p.bud/dim),cur)} a day)`:''}</div></td>`).join('')}<td class="num"><b>${fmt(spent,cur)}</b></td><td></td></tr></tfoot>`:''}</table></div>`;
 
   return `${lastDay||!past?add:''}${kpis}<div class="card chart" style="margin-top:14px"><h2>Spending per day — ${ymLabel(m)}</h2>${svg}</div>${table}`;
 }
